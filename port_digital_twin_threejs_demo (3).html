@@ -1,0 +1,1992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Port of Amsterdam — Digital Twin (3D)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+  :root{
+    --bg-panel:#10141c;--bg-card:#151b25;--bg-card-2:#1a212d;--border:#262e3d;--border-soft:#1e2530;
+    --text-primary:#e8ebf1;--text-muted:#8993a6;--text-dim:#5c6577;
+    --blue:#3b82f6;--orange:#f59e0b;--red:#ef4444;--green:#22c55e;--purple:#a855f7;--yellow:#facc15;--cyan:#38bdf8;--rail:#22d3ee;--trace:#f472b6;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",monospace;--sans:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:#0a0d13;color:var(--text-primary);font-family:var(--sans);height:100%;overflow:hidden;}
+  body{display:flex;flex-direction:column;min-height:100vh;}
+  header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--bg-panel);border-bottom:1px solid var(--border);flex-shrink:0;}
+  .brand{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;}
+  .brand .mark{width:8px;height:8px;border-radius:2px;background:var(--blue);box-shadow:0 0 8px var(--blue);}
+  .header-status{display:flex;align-items:center;gap:16px;font-family:var(--mono);font-size:12px;color:var(--text-muted);}
+  .header-status b{color:var(--text-primary);font-weight:600;}
+  .layout{display:flex;flex:1;min-height:0;}
+  .sidebar{width:255px;flex-shrink:0;background:var(--bg-panel);border-right:1px solid var(--border);padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;font-size:12.5px;}
+  .sidebar.right{border-right:none;border-left:1px solid var(--border);width:270px;}
+  .panel-section h3{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);margin:0 0 8px;font-weight:600;}
+  .gauge-card{background:var(--bg-card);border:1px solid var(--border);border-radius:7px;padding:12px;}
+  .gauge-label{font-size:11px;color:var(--text-muted);margin-bottom:6px;}
+  .gauge-value{font-family:var(--mono);font-size:22px;font-weight:600;}
+  .gauge-source{font-size:10px;color:var(--text-dim);margin-top:6px;border-top:1px solid var(--border-soft);padding-top:6px;}
+  .layer-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:12px;}
+  .switch{position:relative;width:34px;height:18px;flex-shrink:0;}
+  .switch input{opacity:0;width:0;height:0;}
+  .slider{position:absolute;cursor:pointer;inset:0;background:#2a3142;border-radius:18px;transition:.15s;}
+  .slider:before{content:"";position:absolute;height:12px;width:12px;left:3px;top:3px;background:#76808f;border-radius:50%;transition:.15s;}
+  input:checked+.slider{background:rgba(59,130,246,.35);}
+  input:checked+.slider:before{transform:translateX(16px);background:var(--blue);}
+  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:7px;padding:10px;margin-bottom:6px;}
+  .card-2{background:var(--bg-card-2);border:1px solid var(--border);border-radius:7px;padding:10px;}
+  .v-status{font-weight:600;}
+  .btn{padding:7px 0;border-radius:5px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:11px;cursor:pointer;font-family:var(--sans);text-align:center;}
+  .btn.active{background:rgba(250,204,21,.16);border-color:var(--yellow);color:var(--yellow);}
+  .btn.primary{background:rgba(59,130,246,.16);border-color:var(--blue);color:var(--blue);}
+  .btn.warn{background:rgba(245,158,11,.16);border-color:var(--orange);color:var(--orange);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+  .scenario-select{width:100%;padding:8px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;}
+  .tag{font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:3px;font-weight:600;}
+  .tag-blue{background:rgba(59,130,246,.18);color:var(--blue);}.tag-orange{background:rgba(245,158,11,.18);color:var(--orange);}.tag-green{background:rgba(34,197,94,.18);color:var(--green);}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;}
+  #threeContainer{flex:1;width:100%;position:relative;}
+  #threeContainer canvas{display:block;}
+  .hint{position:absolute;bottom:12px;left:12px;font-size:10px;color:var(--text-dim);background:rgba(13,17,25,.7);padding:5px 8px;border-radius:5px;border:1px solid var(--border);pointer-events:none;}
+  .info-popup{position:absolute;z-index:10;background:#0d1119;border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:11px;line-height:1.6;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;}
+  .info-popup.show{display:block;}
+  .info-popup .ip-title{font-weight:700;margin-bottom:4px;font-size:12px;}
+  .info-popup table{width:100%;border-collapse:collapse;}
+  .info-popup td{padding:2px 0;color:var(--text-muted);font-size:11px;}
+  .info-popup td:last-child{text-align:right;font-family:var(--mono);color:var(--text-primary);}
+  /* --- label system --- */
+  .map-label{position:absolute;pointer-events:none;transform:translate(-50%,-50%);z-index:6;text-align:center;transition:opacity .2s;}
+  .map-label .lb-dot{width:8px;height:8px;border-radius:50%;margin:0 auto 3px;border:2px solid rgba(255,255,255,.4);}
+  .map-label .lb-text{font-size:10px;font-family:var(--mono);color:#e8ebf1;background:rgba(10,13,19,.72);padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.12);white-space:nowrap;cursor:pointer;pointer-events:all;}
+  .map-label .lb-text:hover{background:rgba(30,40,60,.92);border-color:var(--blue);}
+  /* --- feature info panel (rich click popup) --- */
+  #featurePanel{position:absolute;top:50%;right:16px;transform:translateY(-50%);z-index:15;background:#0d1119;border:1px solid var(--border);border-radius:9px;padding:14px 16px;width:230px;box-shadow:0 12px 36px rgba(0,0,0,.6);display:none;font-size:12px;}
+  #featurePanel.show{display:block;}
+  #featurePanel .fp-close{position:absolute;top:8px;right:10px;cursor:pointer;color:var(--text-dim);font-size:14px;}
+  #featurePanel .fp-title{font-weight:700;font-size:13px;margin-bottom:3px;}
+  #featurePanel .fp-sub{font-size:10px;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.4px;}
+  #featurePanel .fp-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border-soft);font-size:11px;}
+  #featurePanel .fp-row span:first-child{color:var(--text-muted);}
+  #featurePanel .fp-row b{font-family:var(--mono);}
+  #featurePanel .fp-badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700;margin-top:8px;}
+  footer{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:var(--bg-panel);border-top:1px solid var(--border);}
+  .tabs{display:flex;gap:6px;}
+  .tab{padding:7px 16px;border-radius:5px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans);}
+  .tab.active-low{background:rgba(245,158,11,.18);border-color:var(--orange);color:var(--orange);}
+  .tab.active-normal{background:rgba(59,130,246,.18);border-color:var(--blue);color:var(--blue);}
+  .tab.active-high{background:rgba(34,197,94,.18);border-color:var(--green);color:var(--green);}
+  .metric-head{font-size:11px;color:var(--text-muted);margin-bottom:2px;}
+  .metric-head b{display:block;font-size:14px;color:var(--text-primary);margin-top:2px;}
+  .metric-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border-soft);font-size:12px;}
+  .metric-row span:first-child{color:var(--text-muted);}
+  .metric-row b{font-family:var(--mono);font-size:12px;}
+  .v-good{color:var(--green);}.v-warn{color:var(--orange);}.v-bad{color:var(--red);}.v-yellow{color:var(--yellow);}.v-cyan{color:var(--cyan);}
+  .modal-bar{display:flex;height:7px;border-radius:3px;overflow:hidden;margin:5px 0 3px;}
+  .modal-bar .w{background:var(--blue);}.modal-bar .r{background:var(--yellow);}
+  .vessel-input-row{display:flex;gap:5px;margin-bottom:5px;align-items:center;}
+  .vessel-input-row select,.vessel-input-row input{background:var(--bg-card);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:11px;padding:5px 6px;font-family:var(--sans);}
+  .vessel-input-row select{flex:2;} .vessel-input-row input{flex:1;width:50px;}
+  .vessel-list-item{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border-soft);font-size:11px;}
+  .vessel-list-item .rm{cursor:pointer;color:var(--red);font-size:13px;padding:0 4px;}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+  .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark"></span>Port of Amsterdam — Digital Twin (3D)</div>
+  <div class="header-status">
+    <span>RWS Water Level: <b id="hdrWaterLevel">-0.41 m NAP</b></span>
+    <span>IJmuiden Lock: <b id="hdrLockStatus">Accessible</b></span>
+    <span id="hdrEditFlag" style="display:none;color:var(--yellow);">Editing</span>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="panel-section">
+      <h3>Scenario</h3>
+      <div class="scenario-select" id="scenarioSelect">
+        <span id="scenarioSelectLabel">Short-term — Normal Water Level</span>
+        <span class="tag tag-blue" id="scenarioSelectTag">NORMAL</span>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h3>Water Level Input</h3>
+      <div class="gauge-card">
+        <div class="gauge-label">IJmuiden — ocean parameter</div>
+        <div class="gauge-value" id="gaugeValue" style="color:var(--blue);">-0.41 m NAP</div>
+        <div class="gauge-source">Source: RWS Waterinfo via ddlpy → FastFlood API</div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h3>Network Layers</h3>
+      <div class="layer-row"><span>Waterway</span><label class="switch"><input type="checkbox" id="lyrWaterway" checked><span class="slider"></span></label></div>
+      <div class="layer-row"><span>Rail routing</span><label class="switch"><input type="checkbox" id="lyrRail" checked><span class="slider"></span></label></div>
+      <div class="layer-row"><span>Intermodal hubs</span><label class="switch"><input type="checkbox" id="lyrHubs" checked><span class="slider"></span></label></div>
+      <div class="layer-row"><span>Vessels</span><label class="switch"><input type="checkbox" id="lyrVessels" checked><span class="slider"></span></label></div>
+      <div class="layer-row"><span>Satellite</span><label class="switch"><input type="checkbox" id="lyrSatellite" checked><span class="slider"></span></label></div>
+      <div class="layer-row"><span>OSM buildings</span><label class="switch"><input type="checkbox" id="lyrOSMBuildings" checked><span class="slider"></span></label></div>
+      <div class="layer-row"><span>Real railways (OSM)</span><label class="switch"><input type="checkbox" id="lyrOSMRail" checked><span class="slider"></span></label></div>
+    </div>
+    <div class="panel-section" id="railAbsorptionSection">
+      <h3>Adaptive Response</h3>
+      <div class="card-2">
+        <div style="font-weight:600;margin-bottom:3px;">Rail absorption</div>
+        <div style="font-size:10.5px;color:var(--text-muted);line-height:1.4;margin-bottom:8px;">Reroute deep-draft cargo to rail when waterway clearance is constrained.</div>
+        <button class="btn warn" id="railAbsorptionBtn" style="width:100%;">Activate rail absorption</button>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h3>Time Horizon</h3>
+      <div class="card-2">
+        <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:8px;">Simulate weekly vessel arrivals and check port accessibility over time.</div>
+        <div style="display:flex;gap:4px;margin-bottom:8px;">
+          <button class="btn" id="wk1" data-week="1" style="flex:1;">W1</button>
+          <button class="btn" id="wk2" data-week="2" style="flex:1;">W2</button>
+          <button class="btn" id="wk3" data-week="3" style="flex:1;">W3</button>
+          <button class="btn" id="wk4" data-week="4" style="flex:1;">W4</button>
+        </div>
+        <div class="vessel-input-row" style="margin-bottom:5px;">
+          <label style="font-size:10.5px;color:var(--text-muted);flex:2;">Vessels / week</label>
+          <input type="number" id="weeklyVesselsInput" value="50" min="1" max="300" style="flex:1;width:60px;">
+        </div>
+        <div id="weeklyCargoDisplay" style="font-size:10.5px;color:var(--text-dim);margin-top:4px;">Cargo / week: calculating…</div>
+        <div id="activeWeekStatus" style="font-size:11px;margin-top:6px;padding:5px 8px;border-radius:5px;background:var(--bg-card);border:1px solid var(--border);">Select a week above.</div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h3>Vessel Fleet</h3>
+      <div class="card-2">
+        <div class="vessel-input-row">
+          <select id="vesselTypeSelect">
+            <option value="bulk">Bulk carrier (5.2m)</option>
+            <option value="container">Container (4.8m)</option>
+            <option value="barge">Barge (3.8m)</option>
+            <option value="tanker">Tanker (6.0m)</option>
+            <option value="feeder">Feeder (3.2m)</option>
+          </select>
+          <input type="number" id="vesselCountInput" value="1" min="1" max="50" style="width:48px;">
+          <button class="btn primary" id="addVesselBtn" style="flex:0 0 auto;padding:5px 8px;">Add</button>
+        </div>
+        <div id="vesselList"></div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:6px;" id="fleetSummary">No vessels in fleet.</div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h3>Trace Waterway</h3>
+      <div class="card-2">
+        <div style="font-size:10.5px;color:var(--text-muted);line-height:1.4;margin-bottom:8px;">Click along the canal in the photo to trace a waterway path. Add as many as you need — each is kept as a separate layer you can remove individually.</div>
+        <div class="grid-2" style="margin-bottom:5px;">
+          <button class="btn" id="traceWaterwayBtn">Start Trace</button>
+          <button class="btn" id="traceUndoBtn" disabled>Undo Point</button>
+        </div>
+        <div class="grid-2" style="margin-bottom:5px;">
+          <button class="btn primary" id="traceCommitBtn" disabled>Add Waterway</button>
+          <button class="btn" id="traceCancelBtn" disabled>Cancel</button>
+        </div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:4px;" id="traceStatus">Not tracing.</div>
+        <div id="waterwayList" style="margin-top:8px;"></div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h3>Scenario Editor</h3>
+      <div class="card-2">
+        <div style="font-size:10.5px;color:var(--text-muted);line-height:1.4;margin-bottom:8px;">Click the map to place points. Finish Path to commit.</div>
+        <div class="grid-2" style="margin-bottom:5px;">
+          <button class="btn" id="modeRailBtn">Draw Rail</button>
+          <button class="btn" id="modeRoadBtn">Draw Road</button>
+        </div>
+        <div class="grid-2" style="margin-bottom:5px;">
+          <button class="btn" id="modeCargoBtn">Add Cargo Site</button>
+          <button class="btn" id="finishPathBtn" disabled>Finish Path</button>
+        </div>
+        <div class="grid-2">
+          <button class="btn" id="stopEditBtn">Stop Editing</button>
+          <button class="btn" id="clearEditsBtn">Clear All</button>
+        </div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:6px;" id="editStatus">Not editing.</div>
+        <div id="editMetricsDelta" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);">
+          <div style="font-size:10px;color:var(--yellow);font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Projected impact</div>
+          <div class="metric-row"><span>New rail links</span><b id="edRailCount" class="v-yellow">0</b></div>
+          <div class="metric-row"><span>New road links</span><b id="edRoadCount">0</b></div>
+          <div class="metric-row"><span>New cargo sites</span><b id="edCargoCount" class="v-cyan">0</b></div>
+          <div class="metric-row"><span>Terminal boost</span><b id="edTermBoost" class="v-good">+0</b></div>
+          <div class="metric-row"><span>New terminal capacity</span><b id="edCapacityAdded" class="v-cyan">9 / 9</b></div>
+          <div class="metric-row"><span>Rail modal Δ</span><b id="edRailDelta" class="v-yellow">+0%</b></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <main class="main">
+    <div id="threeContainer">
+      <div class="hint">Drag to orbit · scroll to zoom · click labels for details</div>
+      <div class="info-popup" id="infoPopup"></div>
+      <div id="featurePanel">
+        <span class="fp-close" id="fpClose">✕</span>
+        <div class="fp-title" id="fpTitle"></div>
+        <div class="fp-sub" id="fpSub"></div>
+        <div id="fpBody"></div>
+      </div>
+    </div>
+    <footer>
+      <div class="tabs">
+        <button class="tab" id="tabLow" data-scenario="low">Low Water</button>
+        <button class="tab" id="tabNormal" data-scenario="normal">Normal Water</button>
+        <button class="tab" id="tabHigh" data-scenario="high">High Water</button>
+      </div>
+    </footer>
+  </main>
+  <aside class="sidebar right">
+    <div class="metric-head">Accessibility Metrics —<b id="metricHeadLabel">Normal Water Level</b></div>
+    <div>
+      <div class="metric-row"><span>Terminals reachable</span><b id="mTerminals" class="v-good">9 / 9</b></div>
+      <div class="metric-row"><span>Constrained links</span><b id="mConstrained">1</b></div>
+      <div class="metric-row"><span>Inaccessible links</span><b id="mInaccessible" class="v-good">0</b></div>
+      <div class="metric-row"><span>Navigable depth</span><b id="mDepth">5.8m</b></div>
+      <div class="metric-row"><span>Clearance</span><b id="mClearance" class="v-good">+1.3m</b></div>
+      <div class="metric-row" id="mCargoRailRow" style="display:none;"><span>Cargo to rail</span><b id="mCargoRail" class="v-yellow">28%</b></div>
+      <div class="metric-row" id="mRailUtilRow" style="display:none;"><span>Rail utilisation</span><b id="mRailUtil" class="v-yellow">64%</b></div>
+      <div class="metric-row" id="mTransferRow" style="display:none;"><span>Transfer pts active</span><b id="mTransfer" class="v-yellow">2</b></div>
+    </div>
+    <div>
+      <h3 style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);margin:12px 0 6px;">Modal share</h3>
+      <div class="modal-bar"><div class="w" id="modalWaterBar" style="width:78%;"></div><div class="r" id="modalRailBar" style="width:22%;"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;font-family:var(--mono);color:var(--text-muted);">
+        <span>Water <b id="modalWaterPct" style="color:var(--blue);">78%</b></span>
+        <span>Rail <b id="modalRailPct" style="color:var(--yellow);">22%</b></span>
+      </div>
+    </div>
+    <div>
+      <h3 style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);margin:12px 0 6px;">Fleet status</h3>
+      <div id="fleetStatusPanel" style="font-size:11px;color:var(--text-muted);">No vessels configured.</div>
+    </div>
+    <div>
+      <h3 style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);margin:14px 0 6px;">Weekly Accessibility Forecast</h3>
+      <div id="weeklyForecastPanel" style="font-size:11px;color:var(--text-muted);">—</div>
+    </div>
+    <div>
+      <h3 style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);margin:14px 0 6px;">Terminal Capacity</h3>
+      <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px;">Capacity resolved by drawing rail/road links to added cargo sites.</div>
+      <div id="termCapPanel" style="font-size:11px;">—</div>
+    </div>
+    <div>
+      <h3 style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);margin:14px 0 6px;">Cost–Benefit Analysis</h3>
+      <div id="cbPanel" style="font-size:11px;">
+        <div style="color:var(--text-dim);font-size:10px;">Add vessels or draw infrastructure to see projections.</div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+if(typeof THREE==="undefined"){document.getElementById("threeContainer").innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#ef4444;padding:40px;text-align:center;">Three.js failed to load.</div>';throw new Error("no THREE");}
+
+// ---------- geo projection: lon/lat -> local x,z (lock = origin) ----------
+const REF_LON=4.6086, REF_LAT=52.4630;
+const M_PER_DEG_LON=3388, M_PER_DEG_LAT=5528.7;
+function geo(lon,lat){return{x:(lon-REF_LON)*M_PER_DEG_LON, z:(lat-REF_LAT)*-M_PER_DEG_LAT};}
+
+// key locations from real coordinates
+const LOCK=geo(4.6005,52.4641);
+const PETRO=geo(4.7920,52.4182);
+const WEST=geo(4.8280,52.3998);
+const CONT=geo(4.8460,52.3950);
+
+// waterway: traced along actual North Sea Canal from lock entrance to past container terminal
+// North Sea Canal (Noordzeekanaal) — precise control points from IGS/RWS chart data
+// Canal runs WSW→ENE from IJmuiden sea lock to Amsterdam, mostly straight with a gentle curve
+const WATERWAY_PTS=[
+  geo(4.5740,52.4680),  // outer sea approach, west of lock
+  geo(4.5900,52.4668),  // lock western entrance
+  geo(4.6005,52.4641),  // IJmuiden lock (REF point)
+  geo(4.6200,52.4625),  // east of lock, canal begins
+  geo(4.6500,52.4580),
+  geo(4.6800,52.4520),
+  geo(4.7100,52.4450),
+  geo(4.7400,52.4370),
+  geo(4.7700,52.4280),
+  geo(4.7920,52.4182),  // Petroleumhaven
+  geo(4.8100,52.4100),
+  geo(4.8280,52.3998),  // Westpoort
+  geo(4.8460,52.3950),  // Container terminal
+  geo(4.8700,52.3880),
+  geo(4.9000,52.3780),  // toward Amsterdam
+];
+// rail: south of canal, roughly parallel
+const RAIL_PTS=[
+  geo(4.5740,52.4620),
+  geo(4.5900,52.4610),
+  geo(4.6005,52.4585),
+  geo(4.6200,52.4568),
+  geo(4.6500,52.4522),
+  geo(4.6800,52.4462),
+  geo(4.7100,52.4392),
+  geo(4.7400,52.4312),
+  geo(4.7700,52.4222),
+  geo(4.7920,52.4122),
+  geo(4.8100,52.4040),
+  geo(4.8280,52.3938),
+  geo(4.8460,52.3890),
+  geo(4.8700,52.3820),
+  geo(4.9000,52.3720),
+];
+
+const el=id=>document.getElementById(id);
+
+// ---------- three.js scene ----------
+const container=document.getElementById('threeContainer');
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0a0d13);
+scene.fog=new THREE.Fog(0x0a0d13,1200,3200);
+const camera=new THREE.PerspectiveCamera(45,container.clientWidth/container.clientHeight,1,8000);
+camera.position.set(200,700,-400);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(container.clientWidth,container.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.outputEncoding=THREE.sRGBEncoding;
+container.insertBefore(renderer.domElement,container.firstChild);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);
+controls.target.set(500,0,250);
+controls.enableDamping=true;controls.dampingFactor=0.08;
+controls.maxPolarAngle=Math.PI/2.15;controls.minDistance=200;controls.maxDistance=2400;
+controls.update();
+scene.add(new THREE.AmbientLight(0x304050,0.8));
+const sun=new THREE.DirectionalLight(0xffeedd,1.4);
+sun.position.set(-600,800,200);
+sun.castShadow=true;
+sun.shadow.mapSize.width=2048;sun.shadow.mapSize.height=2048;
+sun.shadow.camera.near=10;sun.shadow.camera.far=3000;
+sun.shadow.camera.left=-1800;sun.shadow.camera.right=1800;
+sun.shadow.camera.top=1800;sun.shadow.camera.bottom=-1800;
+sun.shadow.bias=-0.001;
+scene.add(sun);
+const fillLight=new THREE.DirectionalLight(0x6688aa,0.5);
+fillLight.position.set(800,400,600);scene.add(fillLight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+// simple dark ground backstop
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(6000,6000),new THREE.MeshStandardMaterial({color:0x141a25,roughness:1}));
+ground.rotation.x=-Math.PI/2;ground.position.y=-3;ground.receiveShadow=true;scene.add(ground);
+
+// satellite plane (tiles loaded async)
+const satPlane=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x141a25,roughness:1}));
+satPlane.rotation.x=-Math.PI/2;satPlane.position.y=-1.6;satPlane.visible=false;scene.add(satPlane);
+
+function lon2tileX(lon,z){return Math.floor((lon+180)/360*Math.pow(2,z));}
+function lat2tileY(lat,z){const r=lat*Math.PI/180;return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*Math.pow(2,z));}
+function tileX2lon(x,z){return x/Math.pow(2,z)*360-180;}
+function tileY2lat(y,z){const n=Math.PI-2*Math.PI*y/Math.pow(2,z);return 180/Math.PI*Math.atan(.5*(Math.exp(n)-Math.exp(-n)));}
+let satReady=false;
+async function loadSatelliteMosaic(){
+  const zoom=13;
+  const xMin=lon2tileX(4.55,zoom),xMax=lon2tileX(4.92,zoom);
+  const yMin=lat2tileY(52.49,zoom),yMax=lat2tileY(52.37,zoom);
+  const tw=xMax-xMin+1,th=yMax-yMin+1;
+  const c=document.createElement('canvas');c.width=tw*256;c.height=th*256;
+  const ctx=c.getContext('2d');
+  const loads=[];
+  for(let tx=xMin;tx<=xMax;tx++)for(let ty=yMin;ty<=yMax;ty++){
+    loads.push(new Promise(res=>{
+      const img=new Image();img.crossOrigin='anonymous';
+      img.onload=()=>{ctx.drawImage(img,(tx-xMin)*256,(ty-yMin)*256,256,256);res(true);};
+      img.onerror=()=>res(false);
+      img.src=`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${tx}`;
+    }));
+  }
+  const r=await Promise.all(loads);if(!r.some(v=>v))return;
+  const wL=tileX2lon(xMin,zoom),eL=tileX2lon(xMax+1,zoom);
+  const nL=tileY2lat(yMin,zoom),sL=tileY2lat(yMax+1,zoom);
+  const p1=geo(wL,nL),p2=geo(eL,sL);
+  const w=p2.x-p1.x,d=p2.z-p1.z;
+  const tex=new THREE.CanvasTexture(c);tex.encoding=THREE.sRGBEncoding;tex.needsUpdate=true;
+  satPlane.geometry.dispose();satPlane.geometry=new THREE.PlaneGeometry(w,d);
+  satPlane.position.set((p1.x+p2.x)/2,-1.6,(p1.z+p2.z)/2);
+  satPlane.material.map=tex;satPlane.material.color.set(0x9aa3b5);satPlane.material.needsUpdate=true;
+  satReady=true;satPlane.visible=true;
+}
+loadSatelliteMosaic();
+
+// ---------- network geometry ----------
+function curveFromPts(pts,y){return new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(p.x,y,p.z)));}
+function makeTube(curve,radius,color){return new THREE.Mesh(new THREE.TubeGeometry(curve,100,radius,10,false),new THREE.MeshBasicMaterial({color}));}
+function findNearestOnCurve(curve,target,samples){
+  let best=null,bestD=Infinity;
+  for(let i=0;i<=samples;i++){
+    const tt=i/samples,p=curve.getPoint(tt);
+    const d=(p.x-target.x)**2+(p.z-target.z)**2;
+    if(d<bestD){bestD=d;best={point:p,t:tt};}
+  }
+  return best;
+}
+function addSleeperTies(curve,count,len,group,color){
+  for(let i=0;i<=count;i++){
+    const tt=i/count,pt=curve.getPoint(tt),tan=curve.getTangent(tt);
+    const perp=new THREE.Vector3(-tan.z,0,tan.x).normalize();
+    const tie=new THREE.Mesh(new THREE.BoxGeometry(len,1,2.2),new THREE.MeshBasicMaterial({color}));
+    tie.position.set(pt.x,3.4,pt.z);
+    tie.rotation.y=Math.atan2(perp.x,perp.z);
+    group.add(tie);
+  }
+}
+
+let waterwayCurve=curveFromPts(WATERWAY_PTS,1);
+let waterwayMesh=makeTube(waterwayCurve,5,0x22c55e);
+waterwayMesh.visible=false; // hidden by default — use Trace Waterway to draw over the real canal
+scene.add(waterwayMesh);
+
+// rail: a main trunk plus spurs branching into each terminal zone, styled distinctly
+// from the waterway (cyan, with railroad-tie cross marks, vs the waterway's smooth green/orange glow)
+const RAIL_COLOR=0x22d3ee;
+const railGroup=new THREE.Group();railGroup.visible=false;scene.add(railGroup);
+const railCurve=curveFromPts(RAIL_PTS,2);
+const railTrunkMesh=makeTube(railCurve,3,RAIL_COLOR);railGroup.add(railTrunkMesh);
+addSleeperTies(railCurve,34,14,railGroup,0xbae6fd);
+
+const railBranches=[];
+[PETRO,WEST,CONT].forEach(term=>{
+  const near=findNearestOnCurve(railCurve,term,80);
+  const branchCurve=curveFromPts([{x:near.point.x,z:near.point.z},{x:term.x,z:term.z}],2);
+  const branchMesh=makeTube(branchCurve,1.8,RAIL_COLOR);railGroup.add(branchMesh);
+  addSleeperTies(branchCurve,6,10,railGroup,0xbae6fd);
+  railBranches.push(branchMesh);
+});
+
+function terminalBlock(pos,w,d,h,color){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,transparent:true,opacity:.5,roughness:.8}));
+  m.position.set(pos.x,h/2,pos.z);m.castShadow=true;m.receiveShadow=true;scene.add(m);
+  const e=new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),new THREE.LineBasicMaterial({color}));
+  e.position.copy(m.position);scene.add(e);return m;
+}
+const zonePetro=terminalBlock(PETRO,80,55,12,0x22c55e);
+const zoneWest=terminalBlock(WEST,90,60,14,0x22c55e);
+const zoneCont=terminalBlock(CONT,75,50,11,0x22c55e);
+
+// procedural buildings: warehouses/offices around each terminal cluster, storage tanks at Petroleumhaven
+function seededRandom(seed){let s=seed;return()=>{s=(s*9301+49297)%233280;return s/233280;};}
+
+function addBuildingCluster(center,count,spread,seed,palette){
+  const rnd=seededRandom(seed);
+  for(let i=0;i<count;i++){
+    const w=8+rnd()*14,d=8+rnd()*14,h=10+rnd()*30;
+    const x=center.x+(rnd()*2-1)*spread,z=center.z+(rnd()*2-1)*spread;
+    const color=palette[Math.floor(rnd()*palette.length)];
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.9}));
+    m.position.set(x,h/2,z);scene.add(m);
+    const e=new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),new THREE.LineBasicMaterial({color:0x0a0d13,transparent:true,opacity:.4}));
+    e.position.copy(m.position);scene.add(e);
+  }
+}
+
+// long low warehouse row: the dominant building type in any real port
+function addWarehouseRow(start,count,spacing,angle,seed,color){
+  const rnd=seededRandom(seed);
+  const dir={x:Math.cos(angle),z:Math.sin(angle)};
+  for(let i=0;i<count;i++){
+    const w=28+rnd()*12,d=14+rnd()*6,h=8+rnd()*6;
+    const x=start.x+dir.x*i*spacing+(rnd()-.5)*4;
+    const z=start.z+dir.z*i*spacing+(rnd()-.5)*4;
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:1}));
+    m.position.set(x,h/2,z);m.rotation.y=angle;scene.add(m);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(w+1,1.5,d+1),new THREE.MeshStandardMaterial({color:0x4b5568,roughness:1}));
+    roof.position.set(x,h+.75,z);roof.rotation.y=angle;scene.add(roof);
+  }
+}
+
+// tall portainer-style crane frames
+function addCrane(x,z,color){
+  const leg=new THREE.Mesh(new THREE.BoxGeometry(2.5,38,2.5),new THREE.MeshStandardMaterial({color,roughness:.6,metalness:.4}));
+  leg.position.set(x,19,z);scene.add(leg);
+  const boom=new THREE.Mesh(new THREE.BoxGeometry(28,2,2),new THREE.MeshStandardMaterial({color,roughness:.6,metalness:.4}));
+  boom.position.set(x,39,z);scene.add(boom);
+  const counter=new THREE.Mesh(new THREE.BoxGeometry(10,2,2),new THREE.MeshStandardMaterial({color:0x9ca3af,roughness:.6}));
+  counter.position.set(x-14,37,z);scene.add(counter);
+  const cabin=new THREE.Mesh(new THREE.BoxGeometry(5,4,4),new THREE.MeshStandardMaterial({color:0xfacc15,roughness:.5}));
+  cabin.position.set(x,35,z);scene.add(cabin);
+}
+
+// storage silos / grain elevators
+function addSilos(center,count,spread,seed){
+  const rnd=seededRandom(seed);
+  for(let i=0;i<count;i++){
+    const r=4+rnd()*3.5,h=20+rnd()*18;
+    const x=center.x+(rnd()*2-1)*spread,z=center.z+(rnd()*2-1)*spread;
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,12),new THREE.MeshStandardMaterial({color:0xd1d5db,roughness:.7}));
+    body.position.set(x,h/2,z);scene.add(body);
+    const cap=new THREE.Mesh(new THREE.ConeGeometry(r+.5,4,12),new THREE.MeshStandardMaterial({color:0x9ca3af,roughness:.8}));
+    cap.position.set(x,h+2,z);scene.add(cap);
+  }
+}
+
+// storage tanks with floating roof ring detail
+function addStorageTanks(center,count,spread,seed){
+  const rnd=seededRandom(seed);
+  for(let i=0;i<count;i++){
+    const r=7+rnd()*9,h=10+rnd()*10;
+    const x=center.x+(rnd()*2-1)*spread,z=center.z+(rnd()*2-1)*spread;
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,16),new THREE.MeshStandardMaterial({color:0xc7ccd6,roughness:.6,metalness:.2}));
+    m.position.set(x,h/2,z);scene.add(m);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(r,.8,6,24),new THREE.MeshStandardMaterial({color:0x6b7280,roughness:.5}));
+    ring.rotation.x=Math.PI/2;ring.position.set(x,h*.6,z);scene.add(ring);
+  }
+}
+
+// control / admin tower
+function addControlTower(x,z,h,color){
+  const base=new THREE.Mesh(new THREE.BoxGeometry(10,h*.7,10),new THREE.MeshStandardMaterial({color,roughness:.8}));
+  base.position.set(x,h*.35,z);scene.add(base);
+  const top=new THREE.Mesh(new THREE.BoxGeometry(13,h*.3,13),new THREE.MeshStandardMaterial({color:0x334155,roughness:.5,metalness:.15}));
+  top.position.set(x,h*.7+h*.15,z);scene.add(top);
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,8,6),new THREE.MeshStandardMaterial({color:0x94a3b8,metalness:.5}));
+  mast.position.set(x,h+4,z);scene.add(mast);
+}
+
+// ---- NEW INFRASTRUCTURE TYPES ----
+
+// ship repair dry dock: a long sunken rectangular basin with walls
+function addDryDock(cx,cz,len,wid,angle){
+  const floorMat=new THREE.MeshStandardMaterial({color:0x1e2938,roughness:1});
+  const wallMat=new THREE.MeshStandardMaterial({color:0x374151,roughness:.9});
+  const floor=new THREE.Mesh(new THREE.BoxGeometry(len,2,wid),floorMat);
+  floor.position.set(cx,-1,cz);floor.rotation.y=angle;scene.add(floor);
+  const sides=[{dx:0,dz:wid/2+1.5,w:len,d:3,h:8},{dx:0,dz:-wid/2-1.5,w:len,d:3,h:8},
+               {dx:len/2+1.5,dz:0,w:3,d:wid+6,h:8},{dx:-len/2-1.5,dz:0,w:3,d:wid+6,h:8}];
+  sides.forEach(s=>{
+    const wall=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.h,s.d),wallMat);
+    const rot=new THREE.Matrix4().makeRotationY(angle);
+    const pos=new THREE.Vector3(s.dx,s.h/2,s.dz).applyMatrix4(rot);
+    wall.position.set(cx+pos.x,pos.y,cz+pos.z);wall.rotation.y=angle;scene.add(wall);
+  });
+  // dock tower crane
+  const c1=new THREE.Mesh(new THREE.BoxGeometry(2,30,2),new THREE.MeshStandardMaterial({color:0x94a3b8,metalness:.5}));
+  c1.position.set(cx,15,cz+wid/2+5);scene.add(c1);
+  const boom1=new THREE.Mesh(new THREE.BoxGeometry(len*.7,1.5,1.5),new THREE.MeshStandardMaterial({color:0x94a3b8,metalness:.5}));
+  boom1.position.set(cx,31,cz+wid/2+5);scene.add(boom1);
+}
+
+// stacked container blocks: rows of colored boxes mimicking a yard
+function addContainerYard(cx,cz,rows,cols,angle){
+  const COLORS=[0xef4444,0x3b82f6,0xfacc15,0x22c55e,0xf97316,0xa855f7,0x06b6d4];
+  const rnd=seededRandom(cx*100+cz);
+  const dir={x:Math.cos(angle),z:Math.sin(angle)};
+  const perp={x:-dir.z,z:dir.x};
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const stacks=1+Math.floor(rnd()*3);
+    for(let s=0;s<stacks;s++){
+      const color=COLORS[Math.floor(rnd()*COLORS.length)];
+      const box=new THREE.Mesh(new THREE.BoxGeometry(5.8,2.4,2.3),new THREE.MeshStandardMaterial({color,roughness:.9}));
+      box.position.set(cx+dir.x*c*6.2+perp.x*r*3,1.2+s*2.5,cz+dir.z*c*6.2+perp.z*r*3);
+      box.rotation.y=angle;scene.add(box);
+    }
+  }
+}
+
+// refinery flare stack
+function addFlareStack(x,z,h){
+  const stack=new THREE.Mesh(new THREE.CylinderGeometry(.6,.9,h,8),new THREE.MeshStandardMaterial({color:0x9ca3af,metalness:.6,roughness:.4}));
+  stack.position.set(x,h/2,z);scene.add(stack);
+  const flame=new THREE.Mesh(new THREE.ConeGeometry(1.8,5,8),new THREE.MeshBasicMaterial({color:0xf97316,transparent:true,opacity:.85}));
+  flame.position.set(x,h+2.5,z);scene.add(flame);
+  const glow=new THREE.Mesh(new THREE.SphereGeometry(2.5,8,8),new THREE.MeshBasicMaterial({color:0xfbbf24,transparent:true,opacity:.35}));
+  glow.position.set(x,h+2,z);scene.add(glow);
+  // support cables
+  [0,1,2,3].forEach(i=>{
+    const ang=i*Math.PI/2;
+    const cable=new THREE.Mesh(new THREE.CylinderGeometry(.1,.1,h*.7,4),new THREE.MeshStandardMaterial({color:0x6b7280}));
+    cable.position.set(x+Math.cos(ang)*12,h*.35,z+Math.sin(ang)*12);
+    cable.rotation.z=Math.atan2(12,h*.7)*Math.sign(Math.cos(ang)+.001);
+    scene.add(cable);
+  });
+}
+
+// conveyor bridge (bulk loading arm from quay to ship)
+function addConveyorBridge(x1,z1,x2,z2,peakH){
+  const dx=x2-x1,dz=z2-z1;
+  const len=Math.sqrt(dx*dx+dz*dz);
+  const angle=Math.atan2(dz,dx);
+  const conv=new THREE.Mesh(new THREE.BoxGeometry(len,2,3),new THREE.MeshStandardMaterial({color:0x475569,metalness:.3,roughness:.7}));
+  conv.position.set((x1+x2)/2,peakH,(z1+z2)/2);conv.rotation.y=-angle;scene.add(conv);
+  const support=new THREE.Mesh(new THREE.CylinderGeometry(.8,.8,peakH,6),new THREE.MeshStandardMaterial({color:0x374151,metalness:.3}));
+  support.position.set(x1,peakH/2,z1);scene.add(support);
+}
+
+// mooring dolphin: isolated offshore piling platform
+function addMooringDolphin(x,z){
+  const pile=new THREE.Mesh(new THREE.CylinderGeometry(2,2.5,6,8),new THREE.MeshStandardMaterial({color:0x374151,roughness:.8}));
+  pile.position.set(x,3,z);scene.add(pile);
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(7,1,7),new THREE.MeshStandardMaterial({color:0x4b5563,roughness:1}));
+  deck.position.set(x,6.5,z);scene.add(deck);
+  const bollard=new THREE.Mesh(new THREE.CylinderGeometry(.4,.4,2,6),new THREE.MeshStandardMaterial({color:0x1f2937}));
+  bollard.position.set(x,8,z);scene.add(bollard);
+}
+
+// breakwater: long rough stone embankment
+function addBreakwater(start,end,width){
+  const dx=end.x-start.x,dz=end.z-start.z;
+  const len=Math.sqrt(dx*dx+dz*dz);
+  const ang=Math.atan2(dz,dx);
+  const bw=new THREE.Mesh(new THREE.BoxGeometry(len,5,width),new THREE.MeshStandardMaterial({color:0x4b5563,roughness:1}));
+  bw.position.set((start.x+end.x)/2,2.5,(start.z+end.z)/2);bw.rotation.y=-ang;scene.add(bw);
+  // rough top layer
+  const top=new THREE.Mesh(new THREE.BoxGeometry(len,2,width+2),new THREE.MeshStandardMaterial({color:0x6b7280,roughness:1}));
+  top.position.set((start.x+end.x)/2,5.5,(start.z+end.z)/2);top.rotation.y=-ang;scene.add(top);
+}
+
+// navigation buoy
+function addBuoy(x,z,color){
+  const body=new THREE.Mesh(new THREE.SphereGeometry(1.8,8,8),new THREE.MeshStandardMaterial({color,roughness:.5}));
+  body.position.set(x,1.8,z);scene.add(body);
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.15,.15,4,4),new THREE.MeshStandardMaterial({color:0xd1d5db}));
+  mast.position.set(x,5.5,z);scene.add(mast);
+  const light=new THREE.Mesh(new THREE.SphereGeometry(.4,6,6),new THREE.MeshBasicMaterial({color:0xfbbf24}));
+  light.position.set(x,7.8,z);scene.add(light);
+}
+
+// fuel/gas jetty: narrow platform extending into canal with pipes
+function addJetty(start,end,color){
+  const dx=end.x-start.x,dz=end.z-start.z;
+  const len=Math.sqrt(dx*dx+dz*dz);
+  const ang=Math.atan2(dz,dx);
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(len,1.5,8),new THREE.MeshStandardMaterial({color:0x374151,roughness:1}));
+  deck.position.set((start.x+end.x)/2,2,(start.z+end.z)/2);deck.rotation.y=-ang;scene.add(deck);
+  const pipe=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,len,6),new THREE.MeshStandardMaterial({color,metalness:.5,roughness:.4}));
+  pipe.rotation.z=Math.PI/2;pipe.rotation.y=ang;
+  pipe.position.set((start.x+end.x)/2,3.5,(start.z+end.z)/2);pipe.rotation.y=-ang;scene.add(pipe);
+  [0,1].forEach(i=>{
+    const lp=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,4,6),new THREE.MeshStandardMaterial({color:0x6b7280}));
+    lp.position.set(start.x+dx*(i?0.7:0.3),4,start.z+dz*(i?0.7:0.3));scene.add(lp);
+  });
+}
+
+// ship repair shed (very large arched building)
+function addRepairShed(cx,cz,len,wid,angle){
+  const body=new THREE.Mesh(new THREE.BoxGeometry(len,20,wid),new THREE.MeshStandardMaterial({color:0x334155,roughness:.9,metalness:.05}));
+  body.position.set(cx,10,cz);body.rotation.y=angle;scene.add(body);
+  const arch=new THREE.Mesh(new THREE.BoxGeometry(len,6,wid+2),new THREE.MeshStandardMaterial({color:0x1e293b,roughness:1}));
+  arch.position.set(cx,22,cz);arch.rotation.y=angle;scene.add(arch);
+  // door opening
+  const door=new THREE.Mesh(new THREE.BoxGeometry(16,18,1),new THREE.MeshStandardMaterial({color:0x0a0d13}));
+  const dir2=new THREE.Vector3(Math.cos(angle),0,Math.sin(angle));
+  door.position.set(cx+dir2.x*len/2,9,cz+dir2.z*len/2);door.rotation.y=angle;scene.add(door);
+}
+
+// pipe rack: industrial overhead pipe structure
+function addPipeRack(start,end,h){
+  const dx=end.x-start.x,dz=end.z-start.z;
+  const len=Math.sqrt(dx*dx+dz*dz);
+  const ang=Math.atan2(dz,dx);
+  const segs=Math.floor(len/18);
+  for(let i=0;i<=segs;i++){
+    const t=i/segs;
+    const px=start.x+dx*t,pz=start.z+dz*t;
+    const post=new THREE.Mesh(new THREE.BoxGeometry(1.2,h,1.2),new THREE.MeshStandardMaterial({color:0x475569,metalness:.3}));
+    post.position.set(px,h/2,pz);scene.add(post);
+    const cross=new THREE.Mesh(new THREE.BoxGeometry(1,1,10),new THREE.MeshStandardMaterial({color:0x4b5568,metalness:.3}));
+    cross.position.set(px,h-.5,pz);cross.rotation.y=ang;scene.add(cross);
+  }
+  [0,3,6].forEach(n=>{
+    const pipe=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,len,6),new THREE.MeshStandardMaterial({color:[0xef4444,0x94a3b8,0xfacc15][n/3],metalness:.5}));
+    pipe.rotation.z=Math.PI/2;pipe.rotation.y=ang;
+    pipe.position.set((start.x+end.x)/2,h-1+n*.8,(start.z+end.z)/2);pipe.rotation.y=-ang;scene.add(pipe);
+  });
+}
+
+// ---- placements ----
+
+// ship repair facilities near lock entrance
+addDryDock(LOCK.x+55,LOCK.z-100,80,28,.08);
+addRepairShed(LOCK.x+55,LOCK.z-155,90,32,.08);
+addConveyorBridge(LOCK.x+80,LOCK.z-95,LOCK.x+90,LOCK.z-75,16);
+
+// breakwater seaward of lock
+// two parallel breakwater arms pointing seaward, not crossing
+addBreakwater({x:LOCK.x-18,z:LOCK.z-28},{x:LOCK.x-140,z:LOCK.z-38},11);
+addBreakwater({x:LOCK.x-18,z:LOCK.z+28},{x:LOCK.x-140,z:LOCK.z+38},11);
+
+// navigation buoys along approach channel
+addBuoy(LOCK.x-55,LOCK.z-35,0xef4444);
+addBuoy(LOCK.x-80,LOCK.z+20,0x22c55e);
+addBuoy(LOCK.x-110,LOCK.z-15,0xef4444);
+addBuoy(LOCK.x-130,LOCK.z+35,0x22c55e);
+
+// mooring dolphins at lock approach
+addMooringDolphin(LOCK.x-20,LOCK.z-22);
+addMooringDolphin(LOCK.x-20,LOCK.z+22);
+addMooringDolphin(LOCK.x+20,LOCK.z-22);
+addMooringDolphin(LOCK.x+20,LOCK.z+22);
+
+// Petroleumhaven: flare stacks, pipe racks, additional jetties
+addFlareStack(PETRO.x+55,PETRO.z+30,52);
+addFlareStack(PETRO.x+35,PETRO.z+85,38);
+addPipeRack(geo(4.770,52.426),geo(4.800,52.412),10);
+addJetty({x:PETRO.x-10,z:PETRO.z},{x:PETRO.x-10,z:PETRO.z+45},0xef4444);
+addJetty({x:PETRO.x+25,z:PETRO.z},{x:PETRO.x+25,z:PETRO.z+50},0xf97316);
+addMooringDolphin(PETRO.x-30,PETRO.z+20);
+addMooringDolphin(PETRO.x+50,PETRO.z+18);
+
+// Westpoort: container yard, conveyor, pipe rack
+addContainerYard(WEST.x-30,WEST.z+90,8,12,.07);
+addConveyorBridge(WEST.x-60,WEST.z+40,WEST.x-50,WEST.z+20,14);
+addConveyorBridge(WEST.x-30,WEST.z+40,WEST.x-20,WEST.z+20,14);
+addPipeRack(geo(4.810,52.410),geo(4.835,52.400),9);
+addMooringDolphin(WEST.x-10,WEST.z+16);
+addMooringDolphin(WEST.x+15,WEST.z+16);
+addBuoy(WEST.x-40,WEST.z-10,0x22c55e);
+
+// Container terminal: stacking yard, repair shed, dolphins
+addContainerYard(CONT.x+30,CONT.z+55,6,14,.12);
+addRepairShed(CONT.x-65,CONT.z+55,70,28,.05);
+addMooringDolphin(CONT.x-10,CONT.z+16);
+addMooringDolphin(CONT.x+15,CONT.z+16);
+addBuoy(CONT.x-20,CONT.z-12,0xef4444);
+
+// mid-canal dolphins and buoys as navigational aids
+const MC1=geo(4.680,52.445);
+addMooringDolphin(MC1.x+12,MC1.z);addMooringDolphin(MC1.x-12,MC1.z);
+addBuoy(MC1.x+25,MC1.z-10,0x22c55e);addBuoy(MC1.x-25,MC1.z+10,0xef4444);
+const MC2=geo(4.740,52.428);
+addMooringDolphin(MC2.x+12,MC2.z);addMooringDolphin(MC2.x-12,MC2.z);
+addBuoy(MC2.x,MC2.z-18,0x22c55e);
+
+
+const BUILDING_PALETTE=[0x3a4254,0x47506a,0x2f3648,0x525e78];
+const WAREHOUSE_WARM=[0x4a3e35,0x5c4c40,0x3d3228];
+const WAREHOUSE_COOL=[0x2f3e4e,0x354a57,0x283545];
+const OFFICE_PALETTE=[0x1e3a5f,0x1a3550,0x243f60,0x0f2744];
+
+// ---- port-specific infrastructure kept regardless of OSM load ----
+addStorageTanks({x:PETRO.x+20,z:PETRO.z+50},9,35,22);
+addStorageTanks({x:PETRO.x-30,z:PETRO.z+70},6,24,77);
+addSilos({x:PETRO.x-20,z:PETRO.z-55},5,22,88);
+addControlTower(PETRO.x-10,PETRO.z-80,32,0x1e3a5f);
+addCrane(PETRO.x+45,PETRO.z,0x94a3b8);
+addCrane(PETRO.x+65,PETRO.z-10,0x94a3b8);
+addSilos({x:WEST.x-100,z:WEST.z+80},4,18,92);
+addCrane(WEST.x+10,WEST.z,0x94a3b8);
+addCrane(WEST.x+28,WEST.z-8,0x9ca3af);
+addCrane(WEST.x+46,WEST.z-4,0x94a3b8);
+addControlTower(WEST.x,WEST.z-65,28,0x1e3a5f);
+addCrane(CONT.x+10,CONT.z,0x94a3b8);
+addCrane(CONT.x+28,CONT.z-6,0x9ca3af);
+addControlTower(CONT.x+80,CONT.z+20,24,0x1e3a5f);
+addControlTower(LOCK.x+10,LOCK.z-90,38,0x1e3a5f);
+
+// ---- OSM building footprint loader ----
+const osmGroup=new THREE.Group();scene.add(osmGroup);
+const osmStatus=document.createElement('div');
+osmStatus.style.cssText='position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#0d1119;border:1px solid #262e3d;border-radius:6px;padding:6px 14px;font-size:11px;color:#8993a6;z-index:20;';
+osmStatus.textContent='Loading OSM buildings…';
+document.getElementById('threeContainer').appendChild(osmStatus);
+
+function osmBuildingColor(tags){
+  const t=tags?.building||'';
+  if(['industrial','warehouse','storage_tank'].includes(t)) return 0x334155;
+  if(['office','commercial'].includes(t)) return 0x1e3a5f;
+  if(t==='retail') return 0x3b3050;
+  if(t==='church'||t==='place_of_worship') return 0x4a3e35;
+  if(t==='residential'||t==='apartments') return 0x3a4254;
+  return 0x2f3648;
+}
+
+async function loadOSMBuildings(){
+  // one union query covering only the 4 actual port zones — much smaller than a full corridor bbox
+  const query=`[out:json][timeout:30];
+(
+  way["building"](52.455,4.595,52.475,4.625);
+  way["building"](52.413,4.778,52.432,4.808);
+  way["building"](52.396,4.810,52.416,4.842);
+  way["building"](52.391,4.828,52.410,4.855);
+);(._;>;);out body qt;`;
+
+  const ENDPOINTS=[
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+  ];
+
+  function fetchWithTimeout(url,ms){
+    return Promise.race([
+      fetch(url),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout after '+ms+'ms')),ms))
+    ]);
+  }
+
+  let data=null;
+  for(let i=0;i<ENDPOINTS.length;i++){
+    osmStatus.textContent=`OSM buildings: trying server ${i+1}/${ENDPOINTS.length}…`;
+    try{
+      const res=await fetchWithTimeout(
+        `${ENDPOINTS[i]}?data=${encodeURIComponent(query)}`,22000);
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      data=await res.json();
+      if(data&&data.elements&&data.elements.length) break;
+    }catch(e){
+      console.warn(`Overpass server ${i+1} failed:`,e.message);
+      if(i===ENDPOINTS.length-1) throw e;
+    }
+  }
+  if(!data||!data.elements||!data.elements.length)
+    throw new Error('No data returned from any server');
+
+  const nodes={};
+  data.elements.forEach(e=>{if(e.type==='node') nodes[e.id]={lat:e.lat,lon:e.lon};});
+
+  let count=0;
+  data.elements.forEach(e=>{
+    if(e.type!=='way'||!e.nodes||e.nodes.length<4) return;
+    const coords=e.nodes.map(id=>nodes[id]).filter(Boolean);
+    if(coords.length<3) return;
+    const tags=e.tags||{};
+    const hTag=parseFloat(tags.height)||0;
+    const lvl=parseFloat(tags['building:levels'])||0;
+    const h=Math.min(hTag>0?hTag:lvl>0?lvl*3.5:9, 100);
+    const pts=coords.map(c=>geo(c.lon,c.lat));
+    try{
+      const shape=new THREE.Shape();
+      // negate z so that after rotateX(-PI/2) footprint lands at world +Z (port side)
+      shape.moveTo(pts[0].x,-pts[0].z);
+      for(let i=1;i<pts.length;i++) shape.lineTo(pts[i].x,-pts[i].z);
+      shape.closePath();
+      const g=new THREE.ExtrudeGeometry(shape,{depth:h,bevelEnabled:false});
+      g.rotateX(-Math.PI/2); // shape XY → world XZ, extrusion Z → world Y (up)
+      const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:osmBuildingColor(tags),roughness:.9}));
+      osmGroup.add(mesh);
+      const edges=new THREE.LineSegments(new THREE.EdgesGeometry(g),
+        new THREE.LineBasicMaterial({color:0x0a0d13,transparent:true,opacity:.25}));
+      osmGroup.add(edges);
+      count++;
+    }catch(_){}
+  });
+
+  if(count===0) throw new Error('Buildings parsed but none placed — check coordinate mapping');
+  osmStatus.textContent=`OSM: ${count} real port buildings loaded`;
+  osmStatus.style.color='#22c55e';
+  osmGroup.visible=el('lyrOSMBuildings')?el('lyrOSMBuildings').checked:true;
+  setTimeout(()=>osmStatus.remove(),5000);
+}
+loadOSMBuildings().catch(err=>{
+  console.error('All OSM endpoints failed:',err.message||err);
+  osmStatus.textContent='OSM unavailable — using procedural buildings';
+  osmStatus.style.color='#f59e0b';
+  setTimeout(()=>osmStatus.remove(),5000);
+  addBuildingCluster({x:PETRO.x-55,z:PETRO.z-15},6,30,11,BUILDING_PALETTE);
+  addWarehouseRow({x:PETRO.x-90,z:PETRO.z},4,36,.12,31,WAREHOUSE_WARM[0]);
+  addWarehouseRow({x:WEST.x-75,z:WEST.z+35},5,34,.08,33,WAREHOUSE_COOL[0]);
+  addBuildingCluster({x:WEST.x-60,z:WEST.z+30},6,28,55,BUILDING_PALETTE);
+  addBuildingCluster({x:WEST.x+70,z:WEST.z-10},5,26,66,BUILDING_PALETTE);
+  addWarehouseRow({x:CONT.x+50,z:CONT.z+30},5,30,.15,55,WAREHOUSE_COOL[0]);
+  addBuildingCluster({x:CONT.x+45,z:CONT.z+25},5,24,99,BUILDING_PALETTE);
+  addBuildingCluster({x:LOCK.x+30,z:LOCK.z-55},4,20,66,BUILDING_PALETTE);
+  const M1=geo(4.70,52.435);addWarehouseRow({x:M1.x-40,z:M1.z},4,32,.1,133,WAREHOUSE_COOL[2]);
+  const M2=geo(4.755,52.420);addWarehouseRow({x:M2.x,z:M2.z+35},4,30,.05,166,WAREHOUSE_WARM[1]);
+});
+
+// ---------- OSM real railway loader ----------
+const osmRailGroup=new THREE.Group();scene.add(osmRailGroup);
+const railStatus=document.createElement('div');
+railStatus.style.cssText='position:absolute;top:42px;left:50%;transform:translateX(-50%);background:#0d1119;border:1px solid #262e3d;border-radius:6px;padding:6px 14px;font-size:11px;color:#8993a6;z-index:20;';
+railStatus.textContent='Loading OSM railways…';
+document.getElementById('threeContainer').appendChild(railStatus);
+
+function osmRailColor(tags){
+  const r=tags?.railway||'';
+  if(r==='rail') return 0xfbbf24;          // main line — amber
+  if(r==='siding'||r==='spur') return 0xf59e0b; // sidings — darker amber
+  if(r==='yard'||r==='industrial') return 0xd97706;
+  if(r==='tram') return 0xfde68a;
+  return 0xfbbf24;
+}
+
+// ---- shared rail overlay helpers (used by OSM loader AND Draw Rail tool) ----
+function makeRailRibbon(rawPts,width,color){
+  const verts=[],idx=[];let base=0;
+  for(let i=0;i<rawPts.length-1;i++){
+    const ax=rawPts[i].x,az=rawPts[i].z,bx=rawPts[i+1].x,bz=rawPts[i+1].z;
+    const dx=bx-ax,dz=bz-az,len=Math.sqrt(dx*dx+dz*dz);if(len<0.01)continue;
+    const nx=-dz/len*width*.5,nz=dx/len*width*.5;
+    verts.push(ax+nx,1,az+nz, ax-nx,1,az-nz, bx+nx,1,bz+nz, bx-nx,1,bz-nz);
+    idx.push(base,base+1,base+2, base+1,base+3,base+2);base+=4;
+  }
+  if(verts.length===0)return null;
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+  g.setIndex(idx);g.computeVertexNormals();
+  return new THREE.Mesh(g,new THREE.MeshBasicMaterial({color,side:THREE.DoubleSide,depthTest:false}));
+}
+function makeTickMark(cx,cz,ang,halfLen,color){
+  const nx=Math.cos(ang)*halfLen,nz=Math.sin(ang)*halfLen;
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute([cx+nx,1.4,cz+nz,cx-nx,1.4,cz-nz],3));
+  return new THREE.Line(g,new THREE.LineBasicMaterial({color,depthTest:false}));
+}
+// builds a complete rail overlay Group: border + fill + centre stripe + ticks
+function makeRailOverlay(pts,isMain){
+  const group=new THREE.Group();
+  const fillColor=0xfbbf24;
+  const width=isMain?9:5;
+  const tickGap=isMain?18:25,tickHalf=isMain?7:4.5;
+
+  // border ribbon — dark by default, turns green on rail absorption
+  const border=makeRailRibbon(pts,width+5,0x1a2030);
+  if(border){border.renderOrder=1;border.userData.isBorder=true;group.add(border);}
+
+  // amber fill
+  const fill=makeRailRibbon(pts,width,fillColor);
+  if(fill){fill.renderOrder=2;group.add(fill);}
+
+  // dark centre stripe on main lines
+  if(isMain){const c=makeRailRibbon(pts,2,0x1e1a12);if(c){c.renderOrder=3;group.add(c);}}
+
+  // perpendicular tick marks
+  let acc=0;
+  for(let i=0;i<pts.length-1;i++){
+    const dx=pts[i+1].x-pts[i].x,dz=pts[i+1].z-pts[i].z;
+    const segLen=Math.sqrt(dx*dx+dz*dz);if(segLen<0.01)continue;
+    const ang=Math.atan2(dx,dz)+Math.PI/2;
+    const steps=Math.floor((acc+segLen)/tickGap);
+    for(let s=0;s<steps;s++){
+      const t=(s*tickGap-acc)/segLen;
+      const tick=makeTickMark(pts[i].x+dx*t,pts[i].z+dz*t,ang,tickHalf,0x1e1a12);
+      tick.renderOrder=4;group.add(tick);
+    }
+    acc=(acc+segLen)%tickGap;
+  }
+  return group;
+}
+
+async function loadOSMRailways(){
+  // same 4 port-zone bboxes as buildings, plus a wider mid-canal corridor for the Havenspoorlijn
+  const query=`[out:json][timeout:30];
+(
+  way["railway"](52.455,4.595,52.475,4.625);
+  way["railway"](52.413,4.778,52.432,4.808);
+  way["railway"](52.396,4.810,52.416,4.842);
+  way["railway"](52.391,4.828,52.410,4.855);
+  way["railway"](52.390,4.625,52.460,4.778);
+);(._;>;);out body qt;`;
+
+  const ENDPOINTS=[
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+  ];
+
+  function fetchWithTimeout(url,ms){
+    return Promise.race([
+      fetch(url),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout')),ms))
+    ]);
+  }
+
+  let data=null;
+  for(let i=0;i<ENDPOINTS.length;i++){
+    railStatus.textContent=`OSM railways: server ${i+1}/${ENDPOINTS.length}…`;
+    try{
+      const res=await fetchWithTimeout(`${ENDPOINTS[i]}?data=${encodeURIComponent(query)}`,22000);
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      data=await res.json();
+      if(data&&data.elements&&data.elements.length) break;
+    }catch(e){
+      console.warn(`Rail Overpass ${i+1} failed:`,e.message);
+      if(i===ENDPOINTS.length-1) throw e;
+    }
+  }
+  if(!data||!data.elements||!data.elements.length) throw new Error('Empty railway response');
+
+  const nodes={};
+  data.elements.forEach(e=>{if(e.type==='node') nodes[e.id]={lat:e.lat,lon:e.lon};});
+
+  let count=0;
+  data.elements.forEach(e=>{
+    if(e.type!=='way'||!e.nodes||e.nodes.length<2) return;
+    const tags=e.tags||{};
+    if(!tags.railway) return;
+    if(['platform','station','halt','stop','buffer_stop','crossing'].includes(tags.railway)) return;
+    const coords=e.nodes.map(id=>nodes[id]).filter(Boolean);
+    if(coords.length<2) return;
+    const pts=coords.map(c=>{const p=geo(c.lon,c.lat);return{x:p.x,z:p.z};});
+    const isMain=tags.railway==='rail';
+    const overlayGroup=makeRailOverlay(pts,isMain);
+    osmRailGroup.add(overlayGroup);
+    count++;
+  });
+
+  if(count===0) throw new Error('No railway ways found');
+  railStatus.textContent=`OSM: ${count} real railway segments`;
+  railStatus.style.color='#fbbf24';
+  osmRailGroup.visible=el('lyrOSMRail')?el('lyrOSMRail').checked:true;
+  setTimeout(()=>railStatus.remove(),5000);
+}
+
+loadOSMRailways().catch(err=>{
+  console.error('OSM rail load failed:',err.message||err);
+  railStatus.textContent='OSM rail unavailable';
+  railStatus.style.color='#ef4444';
+  setTimeout(()=>railStatus.remove(),3000);
+});
+
+
+const lockGroup=new THREE.Group();
+lockGroup.add(new THREE.Mesh(new THREE.BoxGeometry(40,8,26),new THREE.MeshStandardMaterial({color:0x2a3142})));
+lockGroup.children[0].position.y=4;
+const gateA=new THREE.Mesh(new THREE.BoxGeometry(34,5,3),new THREE.MeshStandardMaterial({color:0x76808f}));gateA.position.set(0,9,-9);lockGroup.add(gateA);
+const gateB=gateA.clone();gateB.position.set(0,9,9);lockGroup.add(gateB);
+const lockPicker=new THREE.Mesh(new THREE.SphereGeometry(14,10,10),new THREE.MeshBasicMaterial({transparent:true,opacity:0}));lockPicker.position.y=12;lockPicker.userData.type='lock';lockGroup.add(lockPicker);
+const lockLight=new THREE.Mesh(new THREE.SphereGeometry(3.5,10,10),new THREE.MeshBasicMaterial({color:0x22c55e}));lockLight.position.y=18;lockGroup.add(lockLight);
+lockGroup.position.set(LOCK.x,0,LOCK.z);scene.add(lockGroup);
+
+// hubs
+function makeHub(pos){
+  const g=new THREE.Group();
+  const core=new THREE.Mesh(new THREE.SphereGeometry(4.5,12,12),new THREE.MeshBasicMaterial({color:0xa855f7}));g.add(core);
+  const picker=new THREE.Mesh(new THREE.SphereGeometry(12,10,10),new THREE.MeshBasicMaterial({transparent:true,opacity:0}));picker.userData.type='hub';g.add(picker);
+  g.position.set(pos.x,7,pos.z);scene.add(g);return{group:g,core,picker};
+}
+const hub1=makeHub(WEST);const hub2=makeHub(CONT);
+
+// vessel (default)
+const defaultVessel=new THREE.Mesh(new THREE.BoxGeometry(14,4,6),new THREE.MeshStandardMaterial({color:0x22c55e}));
+defaultVessel.position.set(LOCK.x-25,3,LOCK.z+15);scene.add(defaultVessel);
+
+// freight (on main trunk only)
+const freightGroup=new THREE.Group();
+[0.15,0.35,0.55,0.75].forEach(t=>{
+  const pt=railCurve.getPoint(t);
+  const w=new THREE.Mesh(new THREE.BoxGeometry(8,4,4),new THREE.MeshStandardMaterial({color:0x2c3344,emissive:RAIL_COLOR,emissiveIntensity:.25}));
+  w.position.set(pt.x,4,pt.z);freightGroup.add(w);
+});
+freightGroup.visible=false;scene.add(freightGroup);
+
+// pick plane
+const pickPlane=new THREE.Mesh(new THREE.PlaneGeometry(5000,5000),new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
+pickPlane.rotation.x=-Math.PI/2;pickPlane.position.y=.5;scene.add(pickPlane);
+
+// ---------- vessel fleet system ----------
+const VESSEL_TYPES={
+  bulk:{name:'Bulk carrier',draft:5.2,color:0x60a5fa,len:16,wid:6,cargo:18000},
+  container:{name:'Container',draft:4.8,color:0xa78bfa,len:18,wid:6.5,cargo:14000},
+  barge:{name:'Barge',draft:3.8,color:0xf472b6,len:12,wid:4.5,cargo:5000},
+  tanker:{name:'Tanker',draft:6.0,color:0xfacc15,len:20,wid:7,cargo:26000},
+  feeder:{name:'Feeder',draft:3.2,color:0x2dd4bf,len:10,wid:4,cargo:4000}
+};
+let fleet=[];
+let fleetId=0;
+const vesselFleetGroup=new THREE.Group();scene.add(vesselFleetGroup);
+let vesselEntries=[];
+
+function makeVesselGroup(vtype){
+  const t=VESSEL_TYPES[vtype];
+  const g=new THREE.Group();
+  const l=t.len,w=t.wid;
+  const hullMat=new THREE.MeshStandardMaterial({color:t.color,roughness:.7});
+  const deckMat=new THREE.MeshStandardMaterial({color:0x334155,roughness:.8});
+
+  // hull body — back 80% of length, sitting in the water
+  const body=new THREE.Mesh(new THREE.BoxGeometry(l*.8,3.5,w),hullMat);
+  body.position.set(-l*.1,1.8,0);g.add(body);
+
+  // pointed bow — custom wedge geometry pointing +x (east, toward lock)
+  const bv=new Float32Array([
+    l*.3, 3.5,-w/2,  l*.3, 3.5, w/2,  l/2, 3.5, 0,  // top face
+    l*.3,-0.2,-w/2,  l*.3,-0.2, w/2,  l/2,-0.2, 0,   // bottom face
+  ]);
+  const bi=new Uint16Array([0,2,1, 3,4,5, 0,3,5,0,5,2, 1,2,5,5,4,1, 0,1,4,0,4,3]);
+  const bowGeo=new THREE.BufferGeometry();
+  bowGeo.setAttribute('position',new THREE.BufferAttribute(bv,3));
+  bowGeo.setIndex(new THREE.BufferAttribute(bi,1));
+  bowGeo.computeVertexNormals();
+  g.add(new THREE.Mesh(bowGeo,hullMat));
+
+  // waterline stripe (thin light strip along hull side)
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(l*.82,.6,w+.4),
+    new THREE.MeshStandardMaterial({color:0xe2e8f0,roughness:.5}));
+  stripe.position.set(-l*.09,3.3,0);g.add(stripe);
+
+  // deck
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(l*.8,.6,w*.8),deckMat);
+  deck.position.set(-l*.1,3.8,0);g.add(deck);
+
+  // superstructure / bridge — toward stern
+  const bridge=new THREE.Mesh(new THREE.BoxGeometry(l*.18,l*.12,w*.55),deckMat);
+  bridge.position.set(-l*.18,5.5,0);g.add(bridge);
+
+  // bridge windows (thin bright strip)
+  const win=new THREE.Mesh(new THREE.BoxGeometry(l*.19,.5,w*.56),
+    new THREE.MeshStandardMaterial({color:0x93c5fd,roughness:.2,metalness:.3}));
+  win.position.set(-l*.18,6.5,0);g.add(win);
+
+  // funnel
+  const funnel=new THREE.Mesh(new THREE.CylinderGeometry(w*.09,w*.11,l*.1,8),deckMat);
+  funnel.position.set(-l*.26,8,0);g.add(funnel);
+
+  // mast (thin pole at bow)
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.25,.25,8,5),
+    new THREE.MeshStandardMaterial({color:0x94a3b8,roughness:.6}));
+  mast.position.set(l*.25,7.5,0);g.add(mast);
+
+  return g;
+}
+
+function rebuildFleetVisuals(){
+  while(vesselFleetGroup.children.length)vesselFleetGroup.remove(vesselFleetGroup.children[0]);
+  vesselEntries=[];
+
+  // Fixed sea anchor west of IJmuiden lock — ships queue pointing east (bow toward lock)
+  const seaAnchor=geo(4.558,52.4645);
+  const seaDir={x:-1,z:0};    // rows extend further west (out to sea)
+  const acrossDir={x:0,z:1};  // columns spread north-south
+
+  let idx=0;
+  fleet.forEach(v=>{
+    const t=VESSEL_TYPES[v.type];
+    for(let i=0;i<v.count;i++){
+      const row=Math.floor(idx/5),col=(idx%5)-2;
+      const x=seaAnchor.x+seaDir.x*(20+row*t.len*1.4)+acrossDir.x*col*(t.wid*2.2);
+      const z=seaAnchor.z+seaDir.z*(20+row*t.len*1.4)+acrossDir.z*col*(t.wid*2.2);
+
+      const shipGroup=makeVesselGroup(v.type);
+      shipGroup.position.set(x,0,z);
+      // no y-rotation: bow already points +x (east toward lock)
+      vesselFleetGroup.add(shipGroup);
+
+      // beacon (status cone above the ship)
+      const beacon=new THREE.Mesh(new THREE.ConeGeometry(2.6,7,6),
+        new THREE.MeshBasicMaterial({color:0x22c55e}));
+      beacon.position.set(x,18,z);vesselFleetGroup.add(beacon);
+
+      // warning beam for blocked vessels
+      const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,24,6),
+        new THREE.MeshBasicMaterial({color:0xef4444,transparent:true,opacity:0}));
+      beam.position.set(x,22,z);vesselFleetGroup.add(beam);
+
+      vesselEntries.push({group:shipGroup,beacon,beam,draft:t.draft,blocked:false});
+      idx++;
+    }
+  });
+}
+function updateFleetVisualColors(){
+  const depth=SCENARIOS[state.scenario].depth;
+  const visible=el('lyrVessels').checked;
+  vesselEntries.forEach(e=>{
+    const ok=e.draft<=depth;
+    const blocked=!ok&&!state.railOn;
+    e.beacon.material.color.set(ok?0x22c55e:(state.railOn?0xf59e0b:0xef4444));
+    e.blocked=blocked;
+    e.beam.visible=blocked&&visible;
+    e.beam.material.opacity=blocked?0.55:0;
+    e.group.visible=visible;e.beacon.visible=visible;
+  });
+  defaultVessel.visible=(vesselEntries.length===0)&&visible;
+}
+
+function addVesselToFleet(type,count){
+  fleet.push({id:++fleetId,type,count:parseInt(count)||1});
+  renderFleet();rebuildFleetVisuals();render();
+}
+function removeVesselFromFleet(id){
+  fleet=fleet.filter(v=>v.id!==id);renderFleet();rebuildFleetVisuals();render();
+}
+function renderFleet(){
+  const list=el('vesselList');
+  list.innerHTML=fleet.map(v=>{
+    const t=VESSEL_TYPES[v.type];
+    return`<div class="vessel-list-item"><span>${v.count}× ${t.name} (${t.draft}m)</span><span class="rm" data-id="${v.id}">✕</span></div>`;
+  }).join('');
+  list.querySelectorAll('.rm').forEach(b=>b.addEventListener('click',()=>removeVesselFromFleet(parseInt(b.dataset.id))));
+  const total=fleet.reduce((s,v)=>s+v.count,0);
+  el('fleetSummary').textContent=total?`${total} vessel${total>1?'s':''} in fleet.`:'No vessels in fleet.';
+}
+el('addVesselBtn').addEventListener('click',()=>{
+  addVesselToFleet(el('vesselTypeSelect').value,el('vesselCountInput').value);
+});
+
+function getFleetStatus(scenario,railOn){
+  const depth=scenario==='low'?3.9:(scenario==='normal'?5.8:6.3);
+  let accessible=0,blocked=0,rerouted=0;
+  fleet.forEach(v=>{
+    const t=VESSEL_TYPES[v.type];
+    if(t.draft<=depth) accessible+=v.count;
+    else if(railOn) rerouted+=v.count;
+    else blocked+=v.count;
+  });
+  return{accessible,blocked,rerouted,total:accessible+blocked+rerouted};
+}
+function getCargoStatus(scenario,railOn){
+  const depth=scenario==='low'?3.9:(scenario==='normal'?5.8:6.3);
+  let delivered=0,diverted=0,atRisk=0;
+  fleet.forEach(v=>{
+    const t=VESSEL_TYPES[v.type];
+    const tonnage=t.cargo*v.count;
+    if(t.draft<=depth) delivered+=tonnage;
+    else if(railOn) diverted+=tonnage;
+    else atRisk+=tonnage;
+  });
+  return{delivered,diverted,atRisk,total:delivered+diverted+atRisk};
+}
+function fmtTonnes(n){return n.toLocaleString()+'t';}
+function renderFleetStatusPanel(){
+  const fs=getFleetStatus(state.scenario,state.railOn);
+  if(!fs.total){el('fleetStatusPanel').textContent='No vessels configured.';return;}
+  const cs=getCargoStatus(state.scenario,state.railOn);
+  const depth=SCENARIOS[state.scenario].depth;
+  const crowded=fs.total>=8;
+  let warning='';
+  if(fs.blocked>0){
+    warning=`<div style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);border-radius:5px;padding:6px 8px;margin-bottom:8px;color:var(--red);font-weight:600;font-size:11px;">
+      ⚠ ${fs.blocked} vessel${fs.blocked>1?'s':''} blocked — ${fmtTonnes(cs.atRisk)} cargo at risk${crowded?'. Fleet is crowded, look for pulsing red beacons at sea.':''}${SCENARIOS[state.scenario].railAvailable&&!state.railOn?' Activate rail absorption to reroute.':''}
+    </div>`;
+  }
+  el('fleetStatusPanel').innerHTML=warning+
+    `<div style="margin-bottom:4px;">Depth: <b style="font-family:var(--mono);">${depth}m</b></div>`+
+    fleet.map(v=>{
+      const t=VESSEL_TYPES[v.type];
+      const ok=t.draft<=depth;
+      const status=ok?'Accessible':(state.railOn?'Rerouted':'Blocked');
+      const color=ok?'var(--green)':(state.railOn?'var(--orange)':'var(--red)');
+      return`<div class="vessel-list-item"><span>${v.count}× ${t.name} (${t.draft}m)</span><b style="color:${color};font-size:10px;">${status}</b></div>`;
+    }).join('')+
+    `<div style="margin-top:6px;font-size:10px;color:var(--text-dim);">${fs.accessible} accessible · ${fs.blocked} blocked · ${fs.rerouted} rerouted</div>`+
+    `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border-soft);font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;font-weight:600;">Cargo status</div>`+
+    `<div class="vessel-list-item"><span>Delivered (water)</span><b style="color:var(--green);font-size:11px;">${fmtTonnes(cs.delivered)}</b></div>`+
+    `<div class="vessel-list-item"><span>Diverted (rail)</span><b style="color:var(--orange);font-size:11px;">${fmtTonnes(cs.diverted)}</b></div>`+
+    `<div class="vessel-list-item"><span>At risk (blocked)</span><b style="color:var(--red);font-size:11px;">${fmtTonnes(cs.atRisk)}</b></div>`+
+    `<div style="margin-top:4px;font-size:10px;color:var(--text-dim);">Total fleet cargo: ${fmtTonnes(cs.total)}</div>`;
+}
+
+
+// ---------- scenario editor ----------
+let editMode=null,currentPathPts=[],previewLine=null;
+const customRails=[],customRoads=[],customCargo=[];
+function pointsToLine(pts,color,dashed){
+  const geo=new THREE.BufferGeometry().setFromPoints(pts.map(p=>new THREE.Vector3(p.x,3,p.z)));
+  const mat=dashed?new THREE.LineDashedMaterial({color,dashSize:8,gapSize:5}):new THREE.LineBasicMaterial({color});
+  const line=new THREE.Line(geo,mat);if(dashed)line.computeLineDistances();return line;
+}
+function updatePreview(){
+  if(previewLine){scene.remove(previewLine);previewLine=null;}
+  if(currentPathPts.length>=2){
+    previewLine=pointsToLine(currentPathPts,editMode==='rail'?0x22d3ee:0xe5e7eb,editMode==='rail');
+    scene.add(previewLine);
+  }
+}
+function setEditMode(mode){
+  if(mode)stopTracing();
+  editMode=mode;currentPathPts=[];updatePreview();
+  el('finishPathBtn').disabled=(mode===null||mode==='cargo');
+  ['modeRailBtn','modeRoadBtn','modeCargoBtn'].forEach(id=>el(id).classList.remove('active'));
+  if(mode==='rail')el('modeRailBtn').classList.add('active');
+  if(mode==='road')el('modeRoadBtn').classList.add('active');
+  if(mode==='cargo')el('modeCargoBtn').classList.add('active');
+  renderer.domElement.style.cursor=mode?'crosshair':'default';
+  el('hdrEditFlag').style.display=mode?'inline':'none';
+  const msgs={rail:'Click map to place rail points.',road:'Click map to place road points.',cargo:'Click map to place cargo site.'};
+  el('editStatus').textContent=mode?msgs[mode]:'Not editing.';
+}
+function finishPath(){
+  if(currentPathPts.length<2)return;
+  if(editMode==='rail'){
+    const g=makeRailOverlay(currentPathPts,true);
+    g.userData.pts=[...currentPathPts]; // store for proximity check
+    scene.add(g);customRails.push(g);
+  }else{
+    const line=pointsToLine(currentPathPts,0xe5e7eb,false);
+    line.userData={pts:[...currentPathPts]};
+    scene.add(line);customRoads.push(line);
+  }
+  currentPathPts=[];updatePreview();updateEditorMetrics();
+  el('editStatus').textContent=`${editMode==='rail'?'Rail':'Road'} link committed.`;
+}
+function addCargoSite(x,z){
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(14,14,20,16),new THREE.MeshStandardMaterial({color:0x38bdf8,emissive:0x0c4a6e,emissiveIntensity:.45}));
+  base.position.set(x,10,z);scene.add(base);
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(32,4,32),new THREE.MeshStandardMaterial({color:0x0e7490,roughness:.8}));
+  roof.position.set(x,22,z);scene.add(roof);
+  const label=new THREE.Mesh(new THREE.BoxGeometry(6,8,6),new THREE.MeshBasicMaterial({color:0xfbbf24}));
+  label.position.set(x,28,z);scene.add(label);
+  customCargo.push({base,roof,label});
+  updateEditorMetrics();el('editStatus').textContent=`Cargo site placed (${customCargo.length} total).`;
+}
+function updateEditorMetrics(){
+  const rc=customRails.length,rdc=customRoads.length,cc=customCargo.length;
+  const any=rc+rdc+cc>0;
+  el('editMetricsDelta').style.display=any?'block':'none';
+  el('edRailCount').textContent=rc;el('edRoadCount').textContent=rdc;el('edCargoCount').textContent=cc;
+  const termBoost=Math.min(rc,2)+cc;
+  const railDelta=rc*6+rdc*2+cc*3;
+  el('edTermBoost').textContent='+'+termBoost;
+  el('edRailDelta').textContent='+'+railDelta+'%';
+  el('edCapacityAdded').textContent=cc?`9 → ${9+cc}`:'9 (unchanged)';
+  renderTerminalCapacity();
+  render();
+}
+el('modeRailBtn').addEventListener('click',()=>setEditMode('rail'));
+el('modeRoadBtn').addEventListener('click',()=>setEditMode('road'));
+el('modeCargoBtn').addEventListener('click',()=>setEditMode('cargo'));
+el('finishPathBtn').addEventListener('click',finishPath);
+el('stopEditBtn').addEventListener('click',()=>setEditMode(null));
+el('clearEditsBtn').addEventListener('click',()=>{
+  [...customRails,...customRoads].forEach(o=>scene.remove(o));
+  customCargo.forEach(c=>{scene.remove(c.base);scene.remove(c.roof);scene.remove(c.label);});
+  customRails.length=0;customRoads.length=0;customCargo.length=0;
+  updateEditorMetrics();el('editStatus').textContent='All cleared.';setEditMode(null);
+});
+
+// ---------- trace waterway tool — multi-waterway manager ----------
+let tracing=false,tracePts=[],tracePreview=null;
+const tracedWaterways=[]; // [{mesh, id}]
+let twId=0;
+
+function updateTracePreview(){
+  if(tracePreview){scene.remove(tracePreview);tracePreview=null;}
+  if(tracePts.length>=2){
+    const geo=new THREE.BufferGeometry().setFromPoints(tracePts.map(p=>new THREE.Vector3(p.x,4,p.z)));
+    tracePreview=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xf472b6}));
+    scene.add(tracePreview);
+  }
+  el('traceUndoBtn').disabled=tracePts.length===0;
+  el('traceCommitBtn').disabled=tracePts.length<2;
+}
+
+function renderWaterwayList(){
+  const list=el('waterwayList');
+  if(!tracedWaterways.length){list.innerHTML='';return;}
+  list.innerHTML='<div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;">Traced waterways:</div>'+
+    tracedWaterways.map(w=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border-soft);font-size:11px;">
+        <span style="color:var(--cyan);">▬ Waterway ${w.id}</span>
+        <div style="display:flex;gap:5px;">
+          <button class="btn" onclick="toggleTracedWaterway(${w.id})" style="padding:3px 7px;font-size:10px;" id="twVis${w.id}">${w.mesh.visible?'Hide':'Show'}</button>
+          <button class="btn" onclick="removeTracedWaterway(${w.id})" style="padding:3px 7px;font-size:10px;color:var(--red);border-color:rgba(239,68,68,.4);">Remove</button>
+        </div>
+      </div>`).join('');
+}
+
+window.toggleTracedWaterway=function(id){
+  const w=tracedWaterways.find(x=>x.id===id);if(!w)return;
+  w.mesh.visible=!w.mesh.visible;renderWaterwayList();
+};
+window.removeTracedWaterway=function(id){
+  const idx=tracedWaterways.findIndex(x=>x.id===id);if(idx===-1)return;
+  scene.remove(tracedWaterways[idx].mesh);
+  tracedWaterways.splice(idx,1);
+  renderWaterwayList();
+};
+
+function stopTracing(){
+  tracing=false;tracePts=[];
+  if(tracePreview){scene.remove(tracePreview);tracePreview=null;}
+  el('traceUndoBtn').disabled=true;el('traceCommitBtn').disabled=true;el('traceCancelBtn').disabled=true;
+  el('traceWaterwayBtn').classList.remove('active');
+  el('traceStatus').textContent='Not tracing.';
+  renderer.domElement.style.cursor=editMode?'crosshair':'default';
+}
+
+el('traceWaterwayBtn').addEventListener('click',()=>{
+  setEditMode(null);
+  tracing=true;tracePts=[];
+  el('traceWaterwayBtn').classList.add('active');
+  el('traceCancelBtn').disabled=false;
+  el('traceStatus').textContent='Click along the canal. Each click adds a point.';
+  renderer.domElement.style.cursor='crosshair';
+});
+el('traceUndoBtn').addEventListener('click',()=>{
+  tracePts.pop();updateTracePreview();
+  el('traceStatus').textContent=`${tracePts.length} point(s) placed.`;
+});
+el('traceCancelBtn').addEventListener('click',stopTracing);
+el('traceCommitBtn').addEventListener('click',()=>{
+  if(tracePts.length<2)return;
+  const curve=curveFromPts(tracePts,1);
+  const mesh=makeTube(curve,5,0x22c55e);
+  scene.add(mesh);
+  const id=++twId;
+  tracedWaterways.push({mesh,id,curve});
+  el('traceStatus').textContent=`Waterway ${id} added. Start another trace or stop.`;
+  tracePts=[];updateTracePreview();
+  renderWaterwayList();
+  // update waterwayCurve to latest trace for vessel positioning
+  waterwayCurve=curve;
+  if(typeof rebuildFleetVisuals==='function') rebuildFleetVisuals();
+  render();
+});
+
+// ---------- raycasting ----------
+const raycaster=new THREE.Raycaster(),mouse=new THREE.Vector2();
+const infoPopup=el('infoPopup');
+renderer.domElement.addEventListener('click',evt=>{
+  const r=renderer.domElement.getBoundingClientRect();
+  mouse.x=((evt.clientX-r.left)/r.width)*2-1;mouse.y=-((evt.clientY-r.top)/r.height)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  if(tracing){
+    const hit=raycaster.intersectObject(pickPlane)[0];if(!hit)return;
+    tracePts.push({x:hit.point.x,z:hit.point.z});updateTracePreview();
+    el('traceStatus').textContent=`${tracePts.length} point(s) placed.`;
+    return;
+  }
+  if(editMode){
+    const hit=raycaster.intersectObject(pickPlane)[0];if(!hit)return;
+    if(editMode==='cargo')addCargoSite(hit.point.x,hit.point.z);
+    else{currentPathPts.push({x:hit.point.x,z:hit.point.z});updatePreview();}
+    return;
+  }
+  const hits=raycaster.intersectObjects([lockPicker,hub1.picker,hub2.picker]);
+  if(hits.length){
+    const which=hits[0].object===lockPicker?'lock':(hits[0].object===hub1.picker?'hub1':'hub2');
+    showInfo(which,evt.clientX,evt.clientY);
+  }else infoPopup.classList.remove('show');
+});
+
+// ---------- scenario data ----------
+const SCENARIOS={
+  low:{label:"Low Water Level",tabClass:"active-low",tagClass:"tag-orange",tagText:"LOW",waterLevel:-0.60,gaugeColor:"var(--orange)",
+    lockStatus:"Constrained",statusColor:"var(--orange)",depth:3.9,clearance:"-0.6m",clearanceClass:"v-bad",railAvailable:true,deepDraftBlocked:true,
+    off:{terminals:6,tClass:"v-warn",constrained:4,inaccessible:2,iClass:"v-bad",water:61,rail:39},
+    on:{terminals:8,tClass:"v-good",constrained:4,inaccessible:1,iClass:"v-warn",water:54,rail:46,cargoRail:28,railUtil:64,transfer:2}},
+  normal:{label:"Normal Water Level",tabClass:"active-normal",tagClass:"tag-blue",tagText:"NORMAL",waterLevel:-0.41,gaugeColor:"var(--blue)",
+    lockStatus:"Accessible",statusColor:"var(--green)",depth:5.8,clearance:"+1.3m",clearanceClass:"v-good",railAvailable:false,deepDraftBlocked:false,
+    off:{terminals:9,tClass:"v-good",constrained:1,inaccessible:0,iClass:"v-good",water:78,rail:22}},
+  high:{label:"High Water Level",tabClass:"active-high",tagClass:"tag-green",tagText:"HIGH",waterLevel:-0.10,gaugeColor:"var(--green)",
+    lockStatus:"Accessible",statusColor:"var(--green)",depth:6.3,clearance:"+1.8m",clearanceClass:"v-good",railAvailable:false,deepDraftBlocked:false,
+    off:{terminals:9,tClass:"v-good",constrained:0,inaccessible:0,iClass:"v-good",water:91,rail:9}}
+};
+let state={scenario:"normal",railOn:false,activeWeek:1,weeklyVessels:50};
+function currentData(){
+  const s=SCENARIOS[state.scenario];
+  return(state.scenario==="low"&&state.railOn)?{...s,...s.on}:{...s,...s.off};
+}
+function editorBoosts(){
+  const rc=customRails.length,rdc=customRoads.length,cc=customCargo.length;
+  return{
+    termBoost:Math.min(rc,2)+cc,
+    extraCapacity:cc,
+    railDelta:rc*6+rdc*2+cc*3
+  };
+}
+
+function showInfo(which,cx,cy){
+  const s=SCENARIOS[state.scenario],d=currentData(),ra=state.scenario==="low"&&state.railOn;
+  let html='';
+  if(which==='lock'){
+    const blocked=s.deepDraftBlocked&&!ra;
+    html=`<div class="ip-title">IJmuiden Lock</div><table>
+      <tr><td>Water level</td><td>${s.waterLevel.toFixed(2)} m NAP</td></tr>
+      <tr><td>Navigable depth</td><td>${s.depth}m</td></tr>
+      <tr><td>Deep-draft</td><td style="color:${blocked?'#ef4444':'#22c55e'}">${blocked?'Blocked':'Accessible'}</td></tr>
+      <tr><td>Rail alternative</td><td style="color:${ra?'#facc15':'#5c6577'}">${ra?'Operational':'Inactive'}</td></tr>
+    </table>`;
+  }else{
+    const n=which==='hub1'?'Westpoort Hub':'Container Terminal Hub';
+    html=`<div class="ip-title">${n}</div><table>
+      <tr><td>Rail absorption</td><td style="color:${ra?'#facc15':'#5c6577'}">${ra?'Active':'Standby'}</td></tr>
+      <tr><td>Cargo to rail</td><td>${ra?d.cargoRail+'%':'—'}</td></tr>
+      <tr><td>Rail utilisation</td><td>${ra?d.railUtil+'%':'—'}</td></tr>
+    </table>`;
+  }
+  infoPopup.innerHTML=html;
+  const cr=container.getBoundingClientRect();
+  let x=cx-cr.left+12,y=cy-cr.top+12;
+  if(x+220>cr.width)x=cx-cr.left-230;
+  infoPopup.style.left=x+'px';infoPopup.style.top=y+'px';
+  infoPopup.classList.add('show');
+}
+
+// ---------- terminal capacity model ----------
+const TERMINALS={
+  petro:{ name:'Petroleumhaven', pos:PETRO, baseVessels:10, baseTEU:8000,
+          type:'Liquid bulk / petroleum', mesh:null },
+  west: { name:'Westpoort Terminal', pos:WEST, baseVessels:15, baseTEU:12000,
+          type:'Container & general cargo', mesh:null },
+  cont: { name:'Container Terminal (ACT)', pos:CONT, baseVessels:12, baseTEU:9000,
+          type:'Container deepwater', mesh:null },
+};
+// assigned after terminalBlock calls
+function assignTerminalMeshes(){ TERMINALS.petro.mesh=zonePetro; TERMINALS.west.mesh=zoneWest; TERMINALS.cont.mesh=zoneCont; }
+assignTerminalMeshes();
+
+const PROXIMITY=200; // units (~200m) — cargo site or rail/road point within this = counts as serving terminal
+
+function distToTerminal(tx,tz,termId){
+  const p=TERMINALS[termId].pos;
+  return Math.sqrt((tx-p.x)**2+(tz-p.z)**2);
+}
+function cargoSitesNear(termId){
+  return customCargo.filter(c=>distToTerminal(c.base.position.x,c.base.position.z,termId)<PROXIMITY).length;
+}
+function hasInfraLinkNear(termId){
+  // any drawn rail or road has a point within PROXIMITY of the terminal
+  const check=groups=>{
+    for(const g of groups){
+      // Groups from makeRailOverlay store the pts in userData
+      if(g.userData&&g.userData.pts){
+        for(const p of g.userData.pts){
+          if(distToTerminal(p.x,p.z,termId)<PROXIMITY) return true;
+        }
+      }
+    }
+    return false;
+  };
+  return check(customRails)||check(customRoads);
+}
+
+function computeTerminalStatus(termId){
+  return computeTerminalStatusForWeek(termId,state.activeWeek);
+}
+
+function termStatusColor(status){
+  return status==='inaccessible'?0xef4444:
+         status==='overcapacity'?0xf59e0b:
+         status==='resolved'?0x22d3ee:0x22c55e;
+}
+
+function renderTerminalCapacity(){
+  const panel=el('termCapPanel'); if(!panel)return;
+  const rows=Object.keys(TERMINALS).map(id=>{
+    const s=computeTerminalStatus(id);
+    const pct=Math.round((s.load/s.effectiveCap)*100);
+    const barColor=s.status==='inaccessible'?'var(--red)':
+                   s.status==='overcapacity'?'var(--orange)':
+                   s.status==='resolved'?'var(--cyan)':'var(--green)';
+    const statusLabel={inaccessible:'Inaccessible',overcapacity:'Over capacity',
+                       resolved:'Resolved',ok:'Operational'}[s.status];
+    const hint=s.overCap&&!s.cargoNearby?' — add cargo site near terminal':
+               s.overCap&&!s.infraNearby?' — draw rail/road to cargo site':'';
+    return`<div style="padding:7px 0;border-bottom:1px solid var(--border-soft);">
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;">
+        <b style="color:${barColor};">${TERMINALS[id].name}</b>
+        <span style="font-family:var(--mono);font-size:10.5px;color:${barColor};">${statusLabel}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text-dim);margin:2px 0 4px;">${TERMINALS[id].type}</div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${Math.min(pct,100)}%;background:${barColor};border-radius:3px;"></div>
+        </div>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);">${s.load}/${s.effectiveCap} vessels</span>
+      </div>
+      ${s.overCap?`<div style="font-size:10px;color:var(--orange);margin-top:3px;">⚠ +${s.load-s.baseVessels} over base${hint}</div>`:''}
+      ${s.resolved?`<div style="font-size:10px;color:var(--cyan);margin-top:3px;">✓ +${s.cargoBoost} capacity from cargo sites</div>`:''}
+    </div>`;
+  });
+  panel.innerHTML=rows.join('');
+}
+
+// store pts on rail/road groups so proximity check works
+const _origFinishPath=finishPath;
+
+// ---------- time horizon — weekly vessel arrival model ----------
+function avgCargoPerVessel(){
+  const total=fleet.reduce((s,v)=>s+v.count,0);
+  if(!total) return 8400; // default weighted average (tonnes)
+  return Math.round(fleet.reduce((s,v)=>s+VESSEL_TYPES[v.type].cargo*v.count,0)/total);
+}
+
+// compute terminal status for a GIVEN week (overrides state.activeWeek in isolation)
+function computeTerminalStatusForWeek(termId,week){
+  const t=TERMINALS[termId];
+  const fleetVessels=fleet.reduce((s,v)=>s+v.count,0);
+  // weekly incoming accumulates: week 1 = 1×weekly, week 2 = 2×weekly, etc.
+  const incomingVessels=state.weeklyVessels*week;
+  const totalVessels=fleetVessels+incomingVessels;
+  const depth=SCENARIOS[state.scenario].depth;
+  const load=Math.ceil(totalVessels/3)+(state.scenario==='low'?3:0)+(state.scenario==='high'?-2:0);
+  const cargoBoost=cargoSitesNear(termId)*3;
+  const effectiveCap=t.baseVessels+cargoBoost;
+  const overCap=load>effectiveCap;
+  const waterOk=VESSEL_TYPES.barge.draft<=depth;
+  const railActive=state.scenario==='low'&&state.railOn;
+  const waterAccessible=waterOk||railActive;
+  const infraNearby=hasInfraLinkNear(termId);
+  const cargoNearby=cargoSitesNear(termId)>0;
+  const resolved=overCap&&cargoNearby&&infraNearby;
+  const status=!waterAccessible?'inaccessible':overCap&&!resolved?'overcapacity':resolved?'resolved':'ok';
+  return{load,effectiveCap,overCap,resolved,waterAccessible,infraNearby,cargoNearby,status,
+         name:t.name,cargoBoost};
+}
+
+function weeklyForecastStatus(week){
+  // aggregate across all 3 terminals — worst status wins
+  const statuses=['petro','west','cont'].map(id=>computeTerminalStatusForWeek(id,week).status);
+  const priority={inaccessible:0,overcapacity:1,resolved:2,ok:3};
+  return statuses.reduce((worst,s)=>priority[s]<priority[worst]?s:worst,'ok');
+}
+
+function renderWeeklyForecast(){
+  const panel=el('weeklyForecastPanel');if(!panel)return;
+  const avgCargo=avgCargoPerVessel();
+  const weeklyTonnage=state.weeklyVessels*avgCargo;
+  // update cargo display
+  const cd=el('weeklyCargoDisplay');
+  if(cd) cd.textContent=`Cargo / week: ${fmtTonnes(weeklyTonnage)} (avg ${fmtTonnes(avgCargo)}/vessel)`;
+
+  const statusMeta={
+    ok:{label:'Accessible',color:'var(--green)',icon:'✓'},
+    resolved:{label:'Resolved',color:'var(--cyan)',icon:'✓'},
+    overcapacity:{label:'Over capacity',color:'var(--orange)',icon:'⚠'},
+    inaccessible:{label:'Inaccessible',color:'var(--red)',icon:'✗'},
+  };
+
+  const rows=[];
+  for(let w=1;w<=4;w++){
+    const totalIncoming=state.weeklyVessels*w;
+    const totalTonnage=totalIncoming*avgCargo;
+    const overallStatus=weeklyForecastStatus(w);
+    const sm=statusMeta[overallStatus];
+    const isActive=state.activeWeek===w;
+    const termRows=['petro','west','cont'].map(id=>{
+      const ts=computeTerminalStatusForWeek(id,w);
+      const tsm=statusMeta[ts.status];
+      if(ts.status==='ok') return '';
+      const hint=ts.overCap&&!ts.cargoNearby?'→ add cargo site near terminal':
+                 ts.overCap&&!ts.infraNearby?'→ connect cargo site with rail/road':
+                 ts.status==='inaccessible'?'→ activate rail absorption or trace waterway':'';
+      return `<div style="font-size:10px;color:${tsm.color};padding-left:8px;">
+        ${tsm.icon} ${ts.name}: load ${ts.load}/${ts.effectiveCap} ${hint}
+      </div>`;
+    }).join('');
+
+    rows.push(`<div style="padding:7px 0;border-bottom:1px solid var(--border-soft);
+        background:${isActive?'rgba(59,130,246,.07)':'transparent'};border-radius:4px;cursor:pointer;"
+        onclick="setActiveWeek(${w})">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <b style="color:${isActive?'var(--blue)':'var(--text-primary)'};">Week ${w}
+          ${isActive?'<span style="font-size:9px;color:var(--blue);margin-left:4px;">▶ active</span>':''}</b>
+        <span style="font-size:10px;color:${sm.color};font-weight:700;">${sm.icon} ${sm.label}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin:2px 0;">
+        ${totalIncoming} vessels arriving · ${fmtTonnes(totalTonnage)} cargo
+      </div>
+      ${termRows}
+    </div>`);
+  }
+  panel.innerHTML=rows.join('');
+
+  // update active week status badge in left sidebar
+  const aws=el('activeWeekStatus');
+  if(aws){
+    const ws=weeklyForecastStatus(state.activeWeek);
+    const sm=statusMeta[ws];
+    const totalV=state.weeklyVessels*state.activeWeek;
+    aws.textContent=`Week ${state.activeWeek}: ${totalV} vessels — ${sm.icon} ${sm.label}`;
+    aws.style.color=sm.color;
+    aws.style.borderColor=sm.color+'44';
+    aws.style.background=sm.color+'11';
+  }
+
+  // highlight week buttons
+  for(let w=1;w<=4;w++){
+    const btn=el('wk'+w);if(!btn)continue;
+    const ws=weeklyForecastStatus(w);
+    const sm=statusMeta[ws];
+    btn.style.borderColor=state.activeWeek===w?'var(--blue)':sm.color+'88';
+    btn.style.color=state.activeWeek===w?'var(--blue)':sm.color;
+    btn.style.background=state.activeWeek===w?'rgba(59,130,246,.18)':sm.color+'18';
+  }
+}
+
+window.setActiveWeek=function(w){
+  state.activeWeek=w;render();
+};
+
+// ---------- cost–benefit analysis ----------
+const CB={
+  RAIL_CAPEX:15e6,    // €15M per drawn rail link
+  ROAD_CAPEX:8e6,     // €8M per drawn road link
+  CARGO_SITE_CAPEX:25e6, // €25M per cargo site
+  RAIL_ABS_CAPEX:5e6, // €5M one-off for rail absorption system
+  DISCOUNT:0.05,      // 5% discount rate
+  PERIOD:20,          // 20-year analysis horizon
+  // benefit unit rates
+  DELAY_COST_PER_T:120,    // €120/tonne avoided delay cost (low-water disruption)
+  RAIL_SAVING_PER_T:18,    // €18/tonne rail vs waterway cost saving
+  RAIL_LINK_ANNUAL:800e3,  // €800K/yr capacity/reliability benefit per new rail link
+  ROAD_LINK_ANNUAL:400e3,  // €400K/yr per new road link
+  CARGO_SITE_ANNUAL:2.2e6, // €2.2M/yr throughput benefit per new cargo site
+  VESSEL_WAIT_PER_DAY:28e3,// €28K/day per blocked vessel (waiting cost)
+  INCIDENTS_PER_YEAR:22,   // average low-water incidents per year (RWS historical)
+};
+function pv(annualBenefit){
+  // present value of annuity
+  return annualBenefit*(1-(1+CB.DISCOUNT)**-CB.PERIOD)/CB.DISCOUNT;
+}
+function fmt(n){
+  if(Math.abs(n)>=1e9) return '€'+(n/1e9).toFixed(2)+'B';
+  if(Math.abs(n)>=1e6) return '€'+(n/1e6).toFixed(1)+'M';
+  if(Math.abs(n)>=1e3) return '€'+(n/1e3).toFixed(0)+'K';
+  return '€'+n.toFixed(0);
+}
+function renderCostBenefit(){
+  const panel=el('cbPanel');
+  if(!panel) return;
+  const rc=customRails.length, rdc=customRoads.length, cc=customCargo.length;
+  const ra=state.scenario==='low'&&state.railOn;
+  const cs=getCargoStatus(state.scenario,state.railOn);
+  const fs=getFleetStatus(state.scenario,state.railOn);
+  const hasActivity=rc+rdc+cc>0||ra||fs.total>0;
+  if(!hasActivity){panel.innerHTML='<div style="color:var(--text-dim);font-size:10px;">Add vessels or draw infrastructure to see projections.</div>';return;}
+
+  // --- CAPEX ---
+  const railCapex=rc*CB.RAIL_CAPEX;
+  const roadCapex=rdc*CB.ROAD_CAPEX;
+  const cargoCapex=cc*CB.CARGO_SITE_CAPEX;
+  const absCapex=ra?CB.RAIL_ABS_CAPEX:0;
+  const totalCapex=railCapex+roadCapex+cargoCapex+absCapex;
+
+  // --- Annual Benefits ---
+  // 1. Avoided cargo delay (only relevant in low water)
+  const avoidedDelay=state.scenario==='low'
+    ?(cs.atRisk+cs.diverted)*CB.DELAY_COST_PER_T*(CB.INCIDENTS_PER_YEAR/365*5)
+    :0;
+  // 2. Rail modal savings on diverted cargo
+  const railSavings=cs.diverted*CB.RAIL_SAVING_PER_T;
+  // 3. Infrastructure annual benefit from editor edits
+  const infraBenefit=rc*CB.RAIL_LINK_ANNUAL+rdc*CB.ROAD_LINK_ANNUAL+cc*CB.CARGO_SITE_ANNUAL;
+  // 4. Vessel waiting cost reduction
+  const vesselSaving=fs.blocked>0?0:fs.rerouted*CB.VESSEL_WAIT_PER_DAY*(CB.INCIDENTS_PER_YEAR);
+  const totalAnnual=avoidedDelay+railSavings+infraBenefit+vesselSaving;
+
+  // --- Ratios ---
+  const pvBenefits=pv(totalAnnual);
+  const npv=pvBenefits-totalCapex;
+  const bcr=totalCapex>0?pvBenefits/totalCapex:null;
+  const payback=totalAnnual>0?totalCapex/totalAnnual:null;
+
+  const npvColor=npv>=0?'var(--green)':'var(--red)';
+  const bcrColor=bcr&&bcr>=1?'var(--green)':'var(--orange)';
+
+  const row=(label,val,color='var(--text-primary)')=>
+    `<div class="metric-row"><span style="color:var(--text-muted);">${label}</span><b style="color:${color};font-family:var(--mono);">${val}</b></div>`;
+
+  panel.innerHTML=`
+    <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;font-weight:600;margin-bottom:5px;">Investment (CAPEX)</div>
+    ${rc?row(`Rail links (${rc})`,fmt(railCapex)):''}
+    ${rdc?row(`Road links (${rdc})`,fmt(roadCapex)):''}
+    ${cc?row(`Cargo sites (${cc})`,fmt(cargoCapex)):''}
+    ${ra?row('Rail absorption',fmt(absCapex)):''}
+    ${row('Total CAPEX',fmt(totalCapex),'var(--orange)')}
+    <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;font-weight:600;margin:10px 0 5px;">Annual Benefits</div>
+    ${avoidedDelay>0?row('Avoided cargo delay',fmt(avoidedDelay),'var(--green)'):''}
+    ${railSavings>0?row('Rail modal savings',fmt(railSavings),'var(--green)'):''}
+    ${infraBenefit>0?row('Infrastructure uplift',fmt(infraBenefit),'var(--green)'):''}
+    ${vesselSaving>0?row('Vessel wait reduction',fmt(vesselSaving),'var(--green)'):''}
+    ${row('Total annual benefit',fmt(totalAnnual),'var(--green)')}
+    <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;font-weight:600;margin:10px 0 5px;">20-yr Appraisal (5% discount)</div>
+    ${row('PV of benefits',fmt(pvBenefits))}
+    ${row('NPV',fmt(npv),npvColor)}
+    ${bcr!==null?row('Benefit–Cost Ratio',bcr.toFixed(2),bcrColor):''}
+    ${payback!==null?row('Payback period',payback>99?'>99 yrs':payback.toFixed(1)+' yrs',payback<=20?'var(--green)':'var(--orange)'):''}
+    <div style="font-size:10px;color:var(--text-dim);margin-top:8px;line-height:1.5;">
+      Illustrative figures based on RWS disruption frequency data and standard EU transport appraisal unit costs. Not validated financial advice.
+    </div>`;
+}
+
+function render(){
+  const s=SCENARIOS[state.scenario],d=currentData(),ra=state.scenario==="low"&&state.railOn;
+  const eb=editorBoosts();
+
+  el("hdrWaterLevel").textContent=s.waterLevel.toFixed(2)+" m NAP";
+  el("hdrLockStatus").textContent=s.lockStatus;el("hdrLockStatus").style.color=s.statusColor;
+  el("scenarioSelectLabel").textContent="Short-term — "+s.label;
+  const tag=el("scenarioSelectTag");tag.textContent=s.tagText;tag.className="tag "+s.tagClass;
+  el("gaugeValue").textContent=s.waterLevel.toFixed(2)+" m NAP";el("gaugeValue").style.color=s.gaugeColor;
+  el("railAbsorptionBtn").classList.toggle("warn",!state.railOn);
+  el("railAbsorptionBtn").classList.toggle("active",state.railOn);
+  el("railAbsorptionBtn").textContent=state.railOn?"Rail absorption active":"Activate rail absorption";
+
+  // metrics with editor boosts (cargo sites add capacity, not just reachability)
+  const totalTerminals=9+eb.extraCapacity;
+  const adjTerminals=Math.min(d.terminals+eb.termBoost,totalTerminals);
+  const adjRail=Math.min(d.rail+eb.railDelta,95);
+  const adjWater=100-adjRail;
+
+  el("metricHeadLabel").textContent=s.label+(ra?" + Rail Active":"");
+  el("mTerminals").textContent=adjTerminals+" / "+totalTerminals;el("mTerminals").className=adjTerminals>=totalTerminals-1?"v-good":(adjTerminals>=6?"v-warn":"v-bad");
+  el("mConstrained").textContent=d.constrained;
+  el("mInaccessible").textContent=d.inaccessible;el("mInaccessible").className=d.iClass;
+  el("mDepth").textContent=s.depth+"m";
+  el("mClearance").textContent=s.clearance;el("mClearance").className=s.clearanceClass;
+  const showRail=ra;
+  el("mCargoRailRow").style.display=showRail?"flex":"none";
+  el("mRailUtilRow").style.display=showRail?"flex":"none";
+  el("mTransferRow").style.display=showRail?"flex":"none";
+  if(showRail){el("mCargoRail").textContent=d.cargoRail+"%";el("mRailUtil").textContent=d.railUtil+"%";el("mTransfer").textContent=d.transfer;}
+  el("modalWaterBar").style.width=adjWater+"%";el("modalRailBar").style.width=adjRail+"%";
+  el("modalWaterPct").textContent=adjWater+"%";el("modalRailPct").textContent=adjRail+"%";
+
+  ["low","normal","high"].forEach(k=>{
+    el("tab"+k.charAt(0).toUpperCase()+k.slice(1)).className="tab"+(state.scenario===k?" "+SCENARIOS[k].tabClass:"");
+  });
+
+  // 3D updates
+  // default waterway: only show if no traced waterways exist AND layer is on
+  const hasTraced=tracedWaterways.length>0;
+  waterwayMesh.visible=!hasTraced&&el("lyrWaterway").checked;
+  waterwayMesh.material.color.set(state.scenario==="low"?0xf59e0b:0x22c55e);
+  tracedWaterways.forEach(w=>{
+    w.mesh.material.color.set(state.scenario==="low"?0xf59e0b:0x22c55e);
+    if(!el("lyrWaterway").checked) w.mesh.visible=false;
+  });
+  // predefined rail only appears when rail absorption is active — user draws their own via editor
+  railGroup.visible=ra&&el("lyrRail").checked;
+  railGroup.children.forEach(c=>{ if(c.material&&c.material.color) c.material.color.set(RAIL_COLOR); });
+  railTrunkMesh.scale.y=ra?1.4:1;
+  freightGroup.visible=el("lyrRail").checked&&ra;
+  [hub1,hub2].forEach(h=>{h.group.visible=el("lyrHubs").checked;h.core.material.color.set(ra?0xa855f7:0x4a3a55);});
+  defaultVessel.visible=el("lyrVessels").checked;
+  const blocked=s.deepDraftBlocked&&!ra;
+  defaultVessel.material.color.set(blocked?0xef4444:(ra?0xf59e0b:0x22c55e));
+  lockLight.material.color.set(blocked?0xef4444:0x22c55e);
+  // per-terminal accessibility + capacity status — all three zones
+  ['petro','west','cont'].forEach(id=>{
+    const s=computeTerminalStatus(id);
+    TERMINALS[id].mesh.material.color.set(termStatusColor(s.status));
+  });
+  renderTerminalCapacity();
+  renderWeeklyForecast();
+  satPlane.visible=satReady&&el("lyrSatellite").checked;
+  ground.visible=!(satReady&&el("lyrSatellite").checked);
+  osmGroup.visible=el("lyrOSMBuildings").checked;
+  osmRailGroup.visible=el("lyrOSMRail").checked;
+  // green border on all rail (OSM + drawn) when rail absorption active
+  const borderColor=ra?0x22c55e:0x1a2030;
+  function updateBorders(obj){
+    obj.traverse(child=>{
+      if(child.isMesh&&child.userData.isBorder&&child.material)
+        child.material.color.set(borderColor);
+    });
+  }
+  updateBorders(osmRailGroup);
+  customRails.forEach(g=>updateBorders(g));
+
+  renderFleetStatusPanel();
+  updateFleetVisualColors();
+  renderCostBenefit();
+}
+
+function setScenario(key){state.scenario=key;if(key!=="low")state.railOn=false;infoPopup.classList.remove('show');render();}
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>setScenario(t.dataset.scenario)));
+el("scenarioSelect").addEventListener("click",()=>{const o=["normal","low","high"];setScenario(o[(o.indexOf(state.scenario)+1)%3]);});
+el("railAbsorptionBtn").addEventListener("click",()=>{state.railOn=!state.railOn;render();});
+// week buttons
+[1,2,3,4].forEach(w=>{
+  const btn=el('wk'+w);
+  if(btn) btn.addEventListener('click',()=>{state.activeWeek=w;render();});
+});
+// weekly vessel input
+const wvi=el('weeklyVesselsInput');
+if(wvi) wvi.addEventListener('input',()=>{
+  state.weeklyVessels=Math.max(1,parseInt(wvi.value)||50);render();
+});
+["lyrWaterway","lyrRail","lyrHubs","lyrVessels","lyrSatellite","lyrOSMBuildings","lyrOSMRail"].forEach(id=>el(id).addEventListener("change",render));
+
+window.addEventListener('resize',()=>{
+  camera.aspect=container.clientWidth/container.clientHeight;
+  camera.updateProjectionMatrix();renderer.setSize(container.clientWidth,container.clientHeight);
+});
+
+// ---------- label system ----------
+const PORT_FEATURES=[
+  {id:'lock',  pos:{x:LOCK.x,y:22,z:LOCK.z},   color:'#3b82f6', label:'IJmuiden Sea Lock',
+   title:'IJmuiden Sea Lock', sub:'Navigation Control Point',
+   rows:[['Coordinates','52.463°N 4.601°E'],['Built','1929 / 1967 (new)'],['Length','500 m'],['Width','70 m'],['Capacity','55,000 vessels/yr'],['Current depth',()=>SCENARIOS[state.scenario].depth+'m NAP'],['Status',()=>SCENARIOS[state.scenario].lockStatus]],
+   badge:()=>({text:SCENARIOS[state.scenario].lockStatus,color:SCENARIOS[state.scenario].statusColor})},
+  {id:'petro', pos:{x:PETRO.x,y:18,z:PETRO.z}, color:'#f59e0b', label:'Petroleumhaven',
+   title:'Petroleumhaven Terminal', sub:'Liquid Bulk / Petroleum',
+   rows:[['Coordinates','52.421°N 4.792°E'],['Berths','9'],['Capacity','8 M tonnes/yr'],['Products','Crude oil, LNG, chemicals'],['Rail connection','Yes'],['Accessibility',()=>state.scenario==='high'?'Full':'Partial']],
+   badge:()=>({text:'Operational',color:'#22c55e'})},
+  {id:'west',  pos:{x:WEST.x,y:20,z:WEST.z},   color:'#22c55e', label:'Westpoort Terminal',
+   title:'Westpoort Terminal', sub:'Container & General Cargo',
+   rows:[['Coordinates','52.401°N 4.821°E'],['Berths','12'],['Capacity','4 M TEU/yr'],['Rail spur','Operational'],['Intermodal hub','Active'],['Reachability',()=>currentData().terminals+'/9 terminals']],
+   badge:()=>({text:state.railOn?'Rail Active':'Waterway',color:state.railOn?'#facc15':'#22c55e'})},
+  {id:'cont',  pos:{x:CONT.x,y:18,z:CONT.z},   color:'#a78bfa', label:'Container Terminal',
+   title:'Amsterdam Container Terminal', sub:'ACT — Deepwater Berths',
+   rows:[['Coordinates','52.396°N 4.837°E'],['Berths','6'],['Draft limit','14.5 m'],['Cranes','4 ship-to-shore'],['Rail link','Direct'],['Status',()=>currentData().inaccessible>0?'Constrained':'Operational']],
+   badge:()=>({text:'ACT',color:'#a78bfa'})},
+  {id:'hub1',  pos:{x:WEST.x+5,y:16,z:WEST.z+25}, color:'#a855f7', label:'Westpoort Hub',
+   title:'Westpoort Intermodal Hub', sub:'Water-to-Rail Transfer Point',
+   rows:[['Type','Intermodal transfer'],['Transfer rate','340 TEU/hr'],['Rail utilisation',()=>state.railOn?currentData().railUtil+'%':'—'],['Cargo to rail',()=>state.railOn?currentData().cargoRail+'%':'—'],['Status',()=>state.railOn?'Active':'Standby']],
+   badge:()=>({text:state.railOn?'Active':'Standby',color:state.railOn?'#a855f7':'#5c6577'})},
+  {id:'hub2',  pos:{x:CONT.x+5,y:16,z:CONT.z+25}, color:'#a855f7', label:'Container Hub',
+   title:'Container Terminal Intermodal Hub', sub:'Rail Transfer Node',
+   rows:[['Type','Intermodal transfer'],['Rail corridor','Amsterdam–Rhine Canal'],['Status',()=>state.railOn?'Active':'Standby']],
+   badge:()=>({text:state.railOn?'Active':'Standby',color:state.railOn?'#a855f7':'#5c6577'})},
+  {id:'canal', pos:{x:400,y:10,z:220},           color:'#38bdf8', label:'North Sea Canal',
+   title:'North Sea Canal (Noordzeekanaal)', sub:'Primary Navigation Channel',
+   rows:[['Length','26 km'],['Width','200 m'],['Depth (NAP)','-15.5 m'],['Water level',()=>SCENARIOS[state.scenario].waterLevel.toFixed(2)+' m NAP'],['Scenario',()=>SCENARIOS[state.scenario].label],['Annual traffic','55,000+ vessel transits']],
+   badge:()=>({text:'Open',color:'#38bdf8'})},
+  {id:'dock',  pos:{x:LOCK.x+55,y:14,z:LOCK.z-120}, color:'#64748b', label:'Dry Dock',
+   title:'Ship Repair Dry Dock', sub:'Maintenance & Repair Facility',
+   rows:[['Length','80 m'],['Width','28 m'],['Depth','8 m'],['Capacity','1 vessel'],['Services','Hull, engine, structural repair']],
+   badge:()=>({text:'Facility',color:'#64748b'})},
+];
+
+// label DOM elements
+const labelContainer=document.getElementById('threeContainer');
+const labelEls={};
+PORT_FEATURES.forEach(f=>{
+  const div=document.createElement('div');
+  div.className='map-label';
+  div.innerHTML=`<div class="lb-dot" style="background:${f.color};box-shadow:0 0 6px ${f.color};"></div><div class="lb-text">${f.label}</div>`;
+  div.querySelector('.lb-text').addEventListener('click',()=>showFeaturePanel(f.id));
+  labelContainer.appendChild(div);
+  labelEls[f.id]=div;
+});
+
+// feature info panel
+const featurePanel=el('featurePanel');
+el('fpClose').addEventListener('click',()=>featurePanel.classList.remove('show'));
+function showFeaturePanel(id){
+  const f=PORT_FEATURES.find(x=>x.id===id);if(!f)return;
+  el('fpTitle').textContent=f.title;
+  el('fpSub').textContent=f.sub;
+  const badge=f.badge();
+  el('fpBody').innerHTML=f.rows.map(([k,v])=>{
+    const val=typeof v==='function'?v():v;
+    return`<div class="fp-row"><span>${k}</span><b>${val}</b></div>`;
+  }).join('')+`<div class="fp-badge" style="background:${badge.color}22;color:${badge.color};border:1px solid ${badge.color}44;">${badge.text}</div>`;
+  featurePanel.classList.add('show');
+}
+
+// project 3D position to 2D screen, returns null if behind camera
+function project3D(pos){
+  const v=new THREE.Vector3(pos.x,pos.y,pos.z).project(camera);
+  if(v.z>1) return null; // behind camera
+  const rect=renderer.domElement.getBoundingClientRect();
+  return{x:(v.x+1)/2*rect.width, y:(-v.y+1)/2*rect.height};
+}
+
+function updateLabels(){
+  PORT_FEATURES.forEach(f=>{
+    const s=project3D(f.pos);
+    const div=labelEls[f.id];
+    if(!s){div.style.display='none';return;}
+    div.style.display='block';
+    div.style.left=s.x+'px';
+    div.style.top=s.y+'px';
+    // fade with distance
+    const dist=camera.position.distanceTo(new THREE.Vector3(f.pos.x,f.pos.y,f.pos.z));
+    div.style.opacity=Math.max(0,Math.min(1,1-dist/2200)).toString();
+  });
+}
+
+let t=0;
+function animate(){
+  requestAnimationFrame(animate);t+=.02;
+  hub1.core.scale.setScalar(1+Math.sin(t)*.25);
+  hub2.core.scale.setScalar(1+Math.sin(t+1.2)*.25);
+  vesselEntries.forEach((e,i)=>{
+    if(e.blocked){
+      const pulse=1+Math.sin(t*3+i)*.5;
+      e.beacon.scale.setScalar(pulse);
+      e.beam.material.opacity=0.35+Math.sin(t*3+i)*0.25;
+    }else{
+      e.beacon.scale.setScalar(1);
+    }
+  });
+  updateLabels();
+  controls.update();renderer.render(scene,camera);
+}
+render();animate();
+</script>
+</body>
+</html>
